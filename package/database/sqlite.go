@@ -21,7 +21,7 @@ func InitSQLite(path string) {
 	}
 
 	createTables := `
-	CREATE TABLE IF NOT EXISTS manga (
+	CREATE TABLE IF NOT EXISTS mangas (
 		id TEXT PRIMARY KEY,
 		title TEXT NOT NULL,
 		author TEXT,
@@ -33,6 +33,25 @@ func InitSQLite(path string) {
 		cover_url TEXT,
 		description TEXT
 	);
+
+	CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+ 		username TEXT UNIQUE NOT NULL,
+ 		password_hash TEXT NOT NULL,
+ 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS reading_list (
+    	id INTEGER PRIMARY KEY AUTOINCREMENT,
+    	user_id TEXT NOT NULL,
+    	manga_id TEXT NOT NULL,
+    	current_chapter INTEGER,
+    	status TEXT CHECK(status IN ('reading', 'completed', 'plan_to_read')),
+    	last_updated TEXT,
+    	FOREIGN KEY (user_id) REFERENCES users(id),
+    	FOREIGN KEY (manga_id) REFERENCES manga(id)
+	);
+
+
 	`
 	if _, err := DB.Exec(createTables); err != nil {
 		log.Fatalf("failed to create tables: %v", err)
