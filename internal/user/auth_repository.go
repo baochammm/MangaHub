@@ -1,0 +1,40 @@
+package user
+
+import (
+	"database/sql"
+	"errors"
+
+	"github.com/baochammm/mangahub/package/models"
+)
+
+type AuthRepository struct {
+	DB *sql.DB
+}
+
+func NewAuthRepository(db *sql.DB) *AuthRepository {
+	return &AuthRepository{DB: db}
+}
+
+func (r *AuthRepository) CreateUser(username, passwordHash string) error {
+	_, err := r.DB.Exec(
+		"INSERT INTO users (username, password_hash) VALUES (?, ?)",
+		username, passwordHash,
+	)
+	return err
+}
+
+func (r *AuthRepository) FindByUsername(username string) (*models.User, error) {
+	user := models.User{}
+	err := r.DB.QueryRow(
+		"SELECT id, username, password_hash FROM users WHERE username = ?",
+		username,
+	).Scan(&user.UserID, &user.Username, &user.PasswordHash)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
