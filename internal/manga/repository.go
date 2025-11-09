@@ -46,3 +46,24 @@ func (r *Repository) GetAll() ([]models.Manga, error) {
 	}
 	return mangas, nil
 }
+func (r *Repository) GetByID(id string) (*models.Manga, error) {
+	row := r.DB.QueryRow(`
+		SELECT id, title, author, artist, genres, chapter_count, published_year, status, cover_url, description
+		FROM mangas WHERE id = ?
+	`, id)
+
+	var m models.Manga
+	var genresJSON string
+	if err := row.Scan(
+		&m.ID, &m.Title, &m.Author, &m.Artist, &genresJSON,
+		&m.ChapterCount, &m.PublishedYear, &m.Status,
+		&m.CoverURL, &m.Description,
+	); err != nil {
+		return nil, err
+	}
+
+	if genresJSON != "" {
+		_ = json.Unmarshal([]byte(genresJSON), &m.Genres)
+	}
+	return &m, nil
+}

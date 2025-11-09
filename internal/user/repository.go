@@ -2,6 +2,7 @@ package user
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/baochammm/mangahub/package/models"
@@ -20,7 +21,7 @@ func (r *Repository) CreateUser(user models.User) error {
 	return err
 }
 
-func (r *Repository) AddReadingEntry(userID int, entry models.ReadingEntry) error {
+func (r *Repository) AddReadingEntry(userID int64, entry models.ReadingEntry) error {
 	_, err := r.DB.Exec(`
 		INSERT INTO reading_list (user_id, manga_id, current_chapter, status, last_updated)
 		VALUES (?, ?, ?, ?, ?)
@@ -28,8 +29,9 @@ func (r *Repository) AddReadingEntry(userID int, entry models.ReadingEntry) erro
 	return err
 }
 
-func (r *Repository) GetUserWithLists(userID int) (*models.User, error) {
+func (r *Repository) GetUserReadingLists(userID int64) (*models.User, error) {
 	user := models.User{}
+	fmt.Printf("User ID found: %d\n", userID)
 	err := r.DB.QueryRow(`SELECT id, username FROM users WHERE id = ?`, userID).
 		Scan(&user.UserID, &user.Username)
 	if err != nil {
