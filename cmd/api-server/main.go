@@ -6,14 +6,20 @@ import (
 	"github.com/baochammm/mangahub/internal/manga"
 	"github.com/baochammm/mangahub/internal/user"
 	"github.com/baochammm/mangahub/package/database"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using environment variables")
+	}
 	database.InitSQLite("./data/mangahub.db")
 	defer database.Close()
 
+	authRepo := user.NewAuthRepository(database.DB)
+	authHandler := user.NewAuthHandler(authRepo)
 	mangaRepo := manga.NewRepository(database.DB)
 	mangaHandler := manga.NewHandler(mangaRepo)
 	userRepo := user.NewRepository(database.DB)
@@ -27,6 +33,9 @@ func main() {
 	r.GET("/manga", mangaHandler.GetAll)
 
 	// User routes
+	r.POST("/auth/signup", authHandler.Signup)
+	r.POST("/auth/login", authHandler.Login)
+	r.POST("/auth/logout", authHandler.Logout)
 	r.POST("/users", userHandler.CreateUser)
 	r.POST("/users/:user_id/reading-list", userHandler.AddReadingEntry)
 	r.GET("/users/:user_id", userHandler.GetUser)
