@@ -1,4 +1,4 @@
-package user
+package auth
 
 import (
 	"net/http"
@@ -60,7 +60,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokenString := GenerateJWT(user.UserID)
+	tokenString, err := GenerateJWT(user.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
+		return
+	}
 
 	c.SetCookie(
 		"jwt",
@@ -70,16 +74,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		"",
 		false,
 		true,
-	)
+	) //for browser clients
+
+	c.Header("Authorization", "Bearer "+tokenString) //for CLI clients
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"user": gin.H{
-			"id":            user.UserID,
-			"username":      user.Username,
-			"reading_lists": user.ReadingLists,
+			"id":       user.UserID,
+			"username": user.Username,
 		},
 	})
+
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
