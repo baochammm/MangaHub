@@ -40,3 +40,6 @@ a database named "mangahub.db" will be created in your /data directory
 ```
 go run ./cmd/api-server
 ```
+
+5 .env 
+ Create a constant "JWT_SECRET" that stores your Jwt Secret Key
