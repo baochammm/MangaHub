@@ -48,7 +48,7 @@ func InitSQLite(path string) {
     	status TEXT CHECK(status IN ('reading', 'completed', 'plan_to_read')),
     	last_updated TEXT,
     	FOREIGN KEY (user_id) REFERENCES users(id),
-    	FOREIGN KEY (manga_id) REFERENCES manga(id)
+    	FOREIGN KEY (manga_id) REFERENCES mangas(id)
 	);
 
 
