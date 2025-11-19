@@ -84,6 +84,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"id":       user.UserID,
 			"username": user.Username,
 		},
+		"token": tokenString,
 	})
 
 }
