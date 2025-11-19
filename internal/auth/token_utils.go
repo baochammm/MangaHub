@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -103,4 +104,46 @@ func GetUserIdFromContext(c *gin.Context) (int64, error) {
 	default:
 		return 0, errors.New("unexpected type for userId")
 	}
+}
+
+func tokenFilePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".mangahub", "token"), nil
+}
+
+func SaveToken(token string) error {
+	path, err := tokenFilePath()
+	if err != nil {
+		return err
+	}
+
+	// ensure folder exists
+	os.MkdirAll(filepath.Dir(path), 0700)
+
+	return os.WriteFile(path, []byte(token), 0600)
+}
+
+func LoadToken() (string, error) {
+	path, err := tokenFilePath()
+	if err != nil {
+		return "", err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func ClearToken() error {
+	path, err := tokenFilePath()
+	if err != nil {
+		return err
+	}
+	return os.Remove(path)
 }

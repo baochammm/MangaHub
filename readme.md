@@ -1,4 +1,4 @@
-Manga Hub
+# **Manga Hub**
 
 ---
 
@@ -9,7 +9,7 @@ Manga Hub
 
 ---
 
-## Getting 
+## Getting  started
 
 
 
@@ -43,3 +43,20 @@ go run ./cmd/api-server
 
 5 .env 
  Create a constant "JWT_SECRET" that stores your Jwt Secret Key
+
+# **How to run CLI**
+1. Run this in your terminal
+```
+go build ./cmd/mangahub 
+```
+Lệnh này dùng mỗi lần có chỉnh sửa gì trong file cmd/mangahub/main.go
+
+2. How to run commands
+Available commands:
+```
+./mangahub library list
+```
+and
+```
+./mangahub auth login
+```

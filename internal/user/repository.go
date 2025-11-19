@@ -76,7 +76,7 @@ func (r *Repository) IsMangaInUserLibrary(userID int64, mangaID string) (bool, e
 	}
 	return count > 0, nil
 }
-func (r *Repository) GetUserReadingLists(userID int64) (*models.User, error) {
+func (r *Repository) GetUserReadingLists(userID int64) (*models.ReadingLists, error) {
 	user := models.User{}
 	err := r.DB.QueryRow(`SELECT id, username FROM users WHERE id = ?`, userID).
 		Scan(&user.UserID, &user.Username)
@@ -118,10 +118,12 @@ func (r *Repository) GetUserReadingLists(userID int64) (*models.User, error) {
 		PlanToRead: plan,
 	}
 
-	return &user, nil
+	return user.ReadingLists, nil
 }
-func (r *Repository) GetUserReadingListsViaStatus(userID int64, status string) (*models.ReadingLists, error) {
-
+func (r *Repository) GetUserReadingListsViaStatus(userID int64, status string) ([]models.ReadingEntry, error) {
+	if status != "reading" && status != "completed" && status != "plan_to_read" {
+		return nil, errors.New("invalid status value")
+	}
 	rows, err := r.DB.Query(`
 		SELECT manga_id, current_chapter, status, last_updated
 		FROM reading_list WHERE user_id = ? AND status = ?
@@ -131,7 +133,7 @@ func (r *Repository) GetUserReadingListsViaStatus(userID int64, status string) (
 	}
 	defer rows.Close()
 
-	var reading, completed, plan []models.ReadingEntry
+	var entries []models.ReadingEntry
 	for rows.Next() {
 		var entry models.ReadingEntry
 		var lastUpdated string
@@ -142,19 +144,19 @@ func (r *Repository) GetUserReadingListsViaStatus(userID int64, status string) (
 
 		switch status {
 		case "reading":
-			reading = append(reading, entry)
+			entries = append(entries, entry)
 		case "completed":
-			completed = append(completed, entry)
+			entries = append(entries, entry)
 		case "plan_to_read":
-			plan = append(plan, entry)
+			entries = append(entries, entry)
 		}
 	}
 
-	readingList := &models.ReadingLists{
-		Reading:    reading,
-		Completed:  completed,
-		PlanToRead: plan,
-	}
+	// readingList := &models.ReadingLists{
+	// 	Reading:    reading,
+	// 	Completed:  completed,
+	// 	PlanToRead: plan,
+	// }
 
-	return readingList, nil
+	return entries, nil
 }
