@@ -19,4 +19,6 @@ func RegisterUnProtectedRoutes(router *gin.Engine) {
 	router.POST("/auth/logout", authHandler.Logout)
 	router.GET("/search/manga", mangaHandler.SearchByTitle)       // search manga by title
 	router.GET("/manga/filter/genre", mangaHandler.FilterByGenre) // filter manga by genre
+	router.GET("/manga/:id", mangaHandler.GetByID)
+
 }

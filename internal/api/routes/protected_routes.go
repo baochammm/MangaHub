@@ -2,7 +2,6 @@ package routes
 
 import (
 	"github.com/baochammm/mangahub/internal/api/middleware"
-	"github.com/baochammm/mangahub/internal/manga"
 	"github.com/baochammm/mangahub/internal/user"
 	"github.com/baochammm/mangahub/package/database"
 	"github.com/gin-gonic/gin"
@@ -18,7 +17,4 @@ func RegisterProtectedRoutes(router *gin.Engine) {
 	router.DELETE("/users/library", userHandler.DeleteReadingEntry)           // mangahub library remove --manga-id <id>
 	router.GET("/users/library", userHandler.GetUserLibrary)                  // mangahub library list
 	router.GET("/users/library/:status", userHandler.GetUserLibraryViaStatus) // mangahub library list --status=<status>
-	mangaRepo := manga.NewRepository(database.DB)
-	mangaHandler := manga.NewHandler(mangaRepo)
-	router.GET("/manga/:id", mangaHandler.GetByID)
 }
