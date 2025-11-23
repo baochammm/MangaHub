@@ -90,6 +90,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	jwtCookie, err := c.Cookie("jwt")
+	if err != nil || jwtCookie == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "You are not logged in.",
+		})
+		return
+	}
+
 	c.SetCookie("jwt", "", -1, "/", "localhost", false, true)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
