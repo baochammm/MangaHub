@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/baochammm/mangahub/internal/auth"
 	"github.com/baochammm/mangahub/package/models"
@@ -17,6 +18,7 @@ var baseURL string
 var username string
 var password string
 var token string
+var status string
 
 func getToken() string {
 	if token != "" {
@@ -83,37 +85,251 @@ func main() {
 
 			fmt.Println("📚 Your Library")
 
-			if len(list.Reading) > 0 {
-				fmt.Println("\nCurrently Reading:")
-				for _, it := range list.Reading {
-					fmt.Printf(" - %s (ch %d)", it.MangaID, it.CurrentChapter)
-					fmt.Printf(" - Last Updated : %s\n", it.LastUpdated.Format("2006-01-02 15:04:05"))
+			// if user use --status flag
+			if cmd.Flags().Changed("status") {
+				switch status {
+				case "reading":
+					if len(list.Reading) == 0 {
+						fmt.Println("No manga in Reading list.")
+						return nil
+					}
+					fmt.Println("Currently Reading:")
+					for _, it := range list.Reading {
+						fmt.Printf(" - %s (ch %d)\n", it.MangaID, it.CurrentChapter)
+						fmt.Printf("   Last Updated: %s\n", it.LastUpdated.Format("2006-01-02 15:04:05"))
+					}
+					return nil
 
+				case "completed":
+					if len(list.Completed) == 0 {
+						fmt.Println("No manga in Completed list.")
+						return nil
+					}
+					fmt.Println("Completed:")
+					for _, it := range list.Completed {
+						fmt.Printf(" - %s\n", it.MangaID)
+					}
+					return nil
+
+				case "plan_to_read":
+					if len(list.PlanToRead) == 0 {
+						fmt.Println("No manga in Plan to Read list.")
+						return nil
+					}
+					fmt.Println("Plan to Read:")
+					for _, it := range list.PlanToRead {
+						fmt.Printf(" - %s\n", it.MangaID)
+					}
+					return nil
+
+				default:
+					return fmt.Errorf("invalid status: %s (valid: reading, completed, plan_to_read)", status)
+				}
+			}
+
+			// no --status flag => print all
+			if len(list.Reading) > 0 {
+				fmt.Println("Currently Reading:")
+				for _, it := range list.Reading {
+					fmt.Printf(" - %s (ch %d)\n", it.MangaID, it.CurrentChapter)
+					fmt.Printf("   Last Updated: %s\n", it.LastUpdated.Format("2006-01-02 15:04:05"))
 				}
 			}
 
 			if len(list.Completed) > 0 {
-				fmt.Println("\nCompleted:")
+				fmt.Println("Completed:")
 				for _, it := range list.Completed {
 					fmt.Printf(" - %s\n", it.MangaID)
 				}
 			}
 
 			if len(list.PlanToRead) > 0 {
-				fmt.Println("\nPlan to Read:")
+				fmt.Println("Plan to Read:")
 				for _, it := range list.PlanToRead {
 					fmt.Printf(" - %s\n", it.MangaID)
 				}
 			}
 
 			return nil
+
 		},
 	}
 
+	libraryListCmd.Flags().StringVar(&status, "status", "", "Filter by status: reading, completed, plan")
+
+	// add manga command
+	libraryAddCmd := &cobra.Command{
+		Use:   "add",
+		Short: "Add a manga to your library",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mangaID, _ := cmd.Flags().GetString("manga-id")
+			status, _ := cmd.Flags().GetString("status")
+			chapter, _ := cmd.Flags().GetInt("chapter") // optional
+
+			if mangaID == "" {
+				return fmt.Errorf("--manga-id required")
+			}
+			if status == "" {
+				return fmt.Errorf("--status required (reading, completed, plan_to_read)")
+			}
+
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+
+			// Build JSON body
+			reqBody := map[string]interface{}{
+				"manga_id": mangaID,
+				"status":   status,
+			}
+
+			if cmd.Flags().Changed("chapter") {
+				reqBody["current_chapter"] = chapter
+			}
+
+			body, _ := json.Marshal(reqBody)
+
+			// POST request
+			req, err := http.NewRequest("POST", baseURL+"/users/library", bytes.NewBuffer(body))
+			if err != nil {
+				return err
+			}
+
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 201 && resp.StatusCode != 200 {
+				data, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("add failed %s: %s", resp.Status, string(data))
+			}
+
+			fmt.Println("Manga added to your library.")
+			return nil
+		},
+	}
+
+	libraryAddCmd.Flags().String("manga-id", "", "ID of the manga to add")
+	libraryAddCmd.Flags().String("status", "", "Reading status: reading, completed, plan_to_read")
+	libraryAddCmd.Flags().Int("chapter", 0, "Optional: current chapter number")
+
+	//update manga command
+	libraryUpdateCmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update status for a manga in your library",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mangaID, _ := cmd.Flags().GetString("manga-id")
+			newStatus, _ := cmd.Flags().GetString("status")
+
+			if mangaID == "" {
+				return fmt.Errorf("--manga-id required")
+			}
+			if newStatus == "" {
+				return fmt.Errorf("--status required")
+			}
+
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+
+			// build JSON body
+			reqBody := map[string]string{
+				"manga_id": mangaID,
+				"status":   newStatus,
+			}
+
+			body, _ := json.Marshal(reqBody)
+
+			// send PATCH request
+			req, err := http.NewRequest("PATCH", baseURL+"/users/library", bytes.NewBuffer(body))
+			if err != nil {
+				return err
+			}
+
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				data, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("update failed %s: %s", resp.Status, string(data))
+			}
+
+			fmt.Println("Manga status updated successfully.")
+			return nil
+		},
+	}
+
+	libraryUpdateCmd.Flags().String("manga-id", "", "ID of the manga to update")
+	libraryUpdateCmd.Flags().String("status", "", "New status (reading, completed, plan_to_read)")
+
+	libraryRemoveCmd := &cobra.Command{
+		Use:   "remove",
+		Short: "Remove a manga from your library",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mangaID, _ := cmd.Flags().GetString("manga-id")
+
+			if mangaID == "" {
+				return fmt.Errorf("--manga-id required")
+			}
+
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+
+			// JSON body
+			reqBody := map[string]string{
+				"manga_id": mangaID,
+			}
+
+			body, _ := json.Marshal(reqBody)
+
+			// delete request with JSON body
+			req, err := http.NewRequest("DELETE", baseURL+"/users/library", bytes.NewBuffer(body))
+			if err != nil {
+				return err
+			}
+
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				data, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("remove failed %s: %s", resp.Status, string(data))
+			}
+
+			fmt.Println("Manga removed from your library.")
+			return nil
+		},
+	}
+	libraryRemoveCmd.Flags().String("manga-id", "", "ID of the manga to remove")
+
+	// auth subcommands
 	authCmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authentication commands",
 	}
+
+	//login command
 	authLoginCmd := &cobra.Command{
 		Use: "login",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -133,6 +349,12 @@ func main() {
 			if err != nil {
 				return err
 			}
+			defer resp.Body.Close()
+
+			// incorrect credentials => 401
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("invalid username or password")
+			}
 
 			var result struct {
 				Token string `json:"token"`
@@ -150,10 +372,160 @@ func main() {
 		},
 	}
 
+	//sign up command
+	authSignupCmd := &cobra.Command{
+		Use: "signup",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if username == "" || password == "" {
+				return fmt.Errorf("username and password required")
+			}
+			//send signup request to API
+			req := map[string]string{
+				"username": username,
+				"password": password,
+			}
+
+			body, _ := json.Marshal(req)
+
+			resp, err := http.Post(baseURL+"/auth/signup", "application/json", bytes.NewBuffer(body))
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 201 && resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("sign up failed: %s", string(body))
+			}
+
+			fmt.Println("Sign up successful")
+			return nil
+		},
+	}
+
+	//logout command
+	authLogoutCmd := &cobra.Command{
+		Use:   "logout",
+		Short: "Logout and clear saved token",
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			jwt := getToken()
+			if jwt == "" {
+				fmt.Println("You are not logged in.")
+				return nil
+			}
+
+			// send logout request to API
+			req, err := http.NewRequest("POST", baseURL+"/auth/logout", nil)
+			if err == nil {
+				req.Header.Set("Authorization", "Bearer "+jwt)
+				http.DefaultClient.Do(req)
+			}
+
+			// clear token locally
+			if err := auth.ClearToken(); err != nil {
+				return fmt.Errorf("failed to clear token: %v", err)
+			}
+
+			fmt.Println("Logged out successfully.")
+			return nil
+		},
+	}
+
+	// manga subcommands
+	mangaCmd := &cobra.Command{
+		Use:   "manga",
+		Short: "Manga commands",
+	}
+
+	mangaListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all manga by genre, title or get manga  by ID",
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			mangaID, _ := cmd.Flags().GetString("manga-id")
+			genres, _ := cmd.Flags().GetStringSlice("genre")
+			title, _ := cmd.Flags().GetString("title")
+
+			var url string
+
+			switch {
+			case mangaID != "":
+				url = fmt.Sprintf("%s/manga/%s", baseURL, mangaID)
+			case title != "":
+				url = fmt.Sprintf("%s/manga/search?query=%s", baseURL, title)
+			case len(genres) > 0:
+				joined := strings.Join(genres, ",")
+				url = fmt.Sprintf("%s/manga/filter/genre?query=%s", baseURL, joined)
+			default:
+				url = baseURL + "/manga"
+			}
+
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return err
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("failed %s: %s", resp.Status, string(body))
+			}
+
+			if mangaID != "" || title != "" {
+				var m interface{}
+				if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+					return err
+				}
+
+				raw, err := json.Marshal(m)
+				if err != nil {
+					return err
+				}
+				fmt.Println(string(raw))
+				return nil
+			}
+
+			var mangas []models.Manga
+			if err := json.NewDecoder(resp.Body).Decode(&mangas); err != nil {
+				return err
+			}
+
+			fmt.Println("📚 Manga List:")
+			if len(mangas) == 0 {
+				fmt.Println("No manga found.")
+				return nil
+			}
+
+			for _, m := range mangas {
+				fmt.Printf(" - %s (%s)\n", m.Title, m.ID)
+			}
+
+			return nil
+		},
+	}
+	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
+	mangaListCmd.Flags().StringSlice("genre", []string{}, "Filter manga by genres")
+	mangaListCmd.Flags().String("title", "", "Search manga by title")
+
 	libraryCmd.AddCommand(libraryListCmd)
+	libraryCmd.AddCommand(libraryAddCmd)
+	libraryCmd.AddCommand(libraryUpdateCmd)
+	libraryCmd.AddCommand(libraryRemoveCmd)
 	rootCmd.AddCommand(libraryCmd)
+
 	authCmd.AddCommand(authLoginCmd)
+	authCmd.AddCommand(authSignupCmd)
+	authCmd.AddCommand(authLogoutCmd)
 	rootCmd.AddCommand(authCmd)
+
+	mangaCmd.AddCommand(mangaListCmd)
+	rootCmd.AddCommand(mangaCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

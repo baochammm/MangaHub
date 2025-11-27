@@ -16,12 +16,38 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{DB: db}
 }
 
+func (r *Repository) MangaExists(mangaID string) (bool, error) {
+	var count int
+	err := r.DB.QueryRow(`
+        SELECT COUNT(*)
+        FROM mangas
+        WHERE id = ?
+    `, mangaID).Scan(&count)
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
 func (r *Repository) AddReadingEntry(userID int64, entry models.ReadingEntry) error {
 	_, err := r.DB.Exec(`
 		INSERT INTO reading_list (user_id, manga_id, current_chapter, status, last_updated)
 		VALUES (?, ?, ?, ?, ?)
 	`, userID, entry.MangaID, entry.CurrentChapter, entry.Status, entry.LastUpdated.Format(time.RFC3339))
 	return err
+}
+func (r *Repository) ReadingEntryExists(userID int64, mangaID string) (bool, error) {
+	var count int
+	err := r.DB.QueryRow(`
+        SELECT COUNT(*) FROM reading_list
+        WHERE user_id = ? AND manga_id = ?
+    `, userID, mangaID).Scan(&count)
+
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 func (r *Repository) UpdateReadingStatus(userID int64, entry models.ReadingEntry) error {
 	if entry.CurrentChapter != 0 {

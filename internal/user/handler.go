@@ -32,6 +32,29 @@ func (h *Handler) AddReadingEntry(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "manga_id is required"})
 		return
 	}
+
+	// check if manga exists
+	exists, err := h.repo.MangaExists(entry.MangaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "manga_id does not exist"})
+		return
+	}
+
+	// check duplicate entry
+	existsRL, err := h.repo.ReadingEntryExists(userID, entry.MangaID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database error"})
+		return
+	}
+	if existsRL {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "manga already added to library"})
+		return
+	}
+
 	entry.LastUpdated = time.Now()
 
 	if err := h.repo.AddReadingEntry(userID, entry); err != nil {
