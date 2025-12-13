@@ -50,8 +50,17 @@ func InitSQLite(path string) {
     	FOREIGN KEY (user_id) REFERENCES users(id),
     	FOREIGN KEY (manga_id) REFERENCES mangas(id)
 	);
-
-
+	CREATE TABLE IF NOT EXISTS notifications (
+		user_id INTEGER NOT NULL,
+		client_udp_addr TEXT NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id)
+		);
+	CREATE TABLE IF NOT EXISTS subscriptions (
+		user_id INTEGER NOT NULL,
+		manga_id TEXT NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id),
+		FOREIGN KEY (manga_id) REFERENCES mangas(id)
+	);
 	`
 	if _, err := DB.Exec(createTables); err != nil {
 		log.Fatalf("failed to create tables: %v", err)

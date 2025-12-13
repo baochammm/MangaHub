@@ -155,3 +155,26 @@ func (r *Repository) FilterByGenre(genres []string) ([]models.Manga, error) {
 
 	return mangas, nil
 }
+func (r *Repository) UpdateManga(m models.Manga) (bool, error) {
+	var genresJSON string
+	if len(m.Genres) > 0 {
+		data, err := json.Marshal(m.Genres)
+		if err != nil {
+			return false, err
+		}
+		genresJSON = string(data)
+	}
+	_, err := r.DB.Exec(`
+		UPDATE mangas
+		SET title = ?, author = ?, artist = ?, genres = ?, chapter_count = ?,
+		published_year = ?, status = ?, cover_url = ?, description = ?
+		WHERE id = ?
+	`, m.Title, m.Author, m.Artist, genresJSON, m.ChapterCount,
+		m.PublishedYear, m.Status, m.CoverURL, m.Description, m.ID,
+	)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+
+}

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/baochammm/mangahub/internal/auth"
 	"github.com/baochammm/mangahub/package/models"
+	"github.com/baochammm/mangahub/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,7 +18,7 @@ func NewHandler(repo *Repository) *Handler {
 }
 
 func (h *Handler) AddReadingEntry(c *gin.Context) {
-	userID, err := auth.GetUserIdFromContext(c)
+	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -65,7 +65,7 @@ func (h *Handler) AddReadingEntry(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "reading entry added"})
 }
 func (h *Handler) UpdateReadingStatus(c *gin.Context) {
-	userID, err := auth.GetUserIdFromContext(c)
+	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -104,7 +104,7 @@ func (h *Handler) UpdateReadingStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "reading entry updated"})
 }
 func (h *Handler) UpdateReadingProgress(c *gin.Context) {
-	userID, err := auth.GetUserIdFromContext(c)
+	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -143,7 +143,7 @@ func (h *Handler) UpdateReadingProgress(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "reading entry for manga " + entry.MangaID + " updated"})
 }
 func (h *Handler) DeleteReadingEntry(c *gin.Context) {
-	userID, err := auth.GetUserIdFromContext(c)
+	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -178,7 +178,7 @@ func (h *Handler) DeleteReadingEntry(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "manga entry " + entry.MangaID + " deleted"})
 }
 func (h *Handler) GetUserLibrary(c *gin.Context) {
-	userID, err := auth.GetUserIdFromContext(c)
+	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
@@ -195,7 +195,7 @@ func (h *Handler) GetUserLibrary(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 func (h *Handler) GetUserLibraryViaStatus(c *gin.Context) {
-	userID, err := auth.GetUserIdFromContext(c)
+	userID, err := utils.GetUserIdFromContext(c)
 	status := c.Param("status")
 
 	if err != nil {

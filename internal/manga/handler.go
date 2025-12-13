@@ -4,15 +4,24 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/baochammm/mangahub/internal/udp"
+	"github.com/baochammm/mangahub/package/models"
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	repo *Repository
+	repo       *Repository
+	udpHandler *udp.UDPHandler
 }
 
-func NewHandler(repo *Repository) *Handler {
-	return &Handler{repo: repo}
+func NewHandler(
+	repo *Repository,
+	udpHandler *udp.UDPHandler,
+) *Handler {
+	return &Handler{
+		repo:       repo,
+		udpHandler: udpHandler,
+	}
 }
 
 func (h *Handler) GetAll(c *gin.Context) {
@@ -70,4 +79,23 @@ func (h *Handler) FilterByGenre(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, mangas)
+}
+
+// special admin handler to update manga database
+func (h *Handler) UpdateManga(c *gin.Context) {
+	var m models.Manga
+	if err := c.ShouldBindJSON(&m); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	success, err := h.repo.UpdateManga(m)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": success,
+		"message": "Manga database updated successfully"})
+	h.udpHandler.NotifyNewChapter(m.ID, int64(m.ChapterCount))
 }
