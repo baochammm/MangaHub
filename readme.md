@@ -45,18 +45,20 @@ go run ./cmd/api-server
  Create a constant "JWT_SECRET" that stores your Jwt Secret Key
 
 # **How to run CLI**
-1. Run this in your terminal
+1. Run this in your terminal (T MỚI MOVE MANGAHUB RA NGOÀI NHA)
 ```
-go build ./cmd/mangahub 
+go build ./mangahub 
 ```
 Lệnh này dùng mỗi lần có chỉnh sửa gì trong file cmd/mangahub/main.go
 
 2. How to run commands
 Available commands:
 ```
-./mangahub library list
+mangahub library list
+mangahub auth
+mangahub notify 
 ```
 and
 ```
-./mangahub auth login
+mangahub auth login
 ```
