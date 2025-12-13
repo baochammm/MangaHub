@@ -16,7 +16,7 @@ func main() {
 	}
 	database.InitSQLite("./data/mangahub.db")
 	defer database.Close()
-
+	//REST API Router
 	r := gin.Default()
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Welcome to MangaHub API! Available endpoints:  /manga [GET] - List all mangas,  /users [POST] - Create a new user,  /users/:user_id/reading-list [POST] - Add a reading entry for a user, /users/:user_id [GET] - Get user details with reading lists"})
@@ -27,4 +27,7 @@ func main() {
 	if err := r.Run(":8080"); err != nil {
 		log.Fatal("server failed:", err)
 	}
+	//UDP Server
+
+	//
 }

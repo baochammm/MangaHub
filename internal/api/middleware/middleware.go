@@ -3,14 +3,14 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/baochammm/mangahub/internal/auth"
+	"github.com/baochammm/mangahub/utils"
 	"github.com/gin-gonic/gin"
 )
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		token, err := auth.GetAccessToken(c)
+		token, err := utils.GetAccessToken(c)
 
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -23,7 +23,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		claims, err := auth.ValidateToken(token)
+		claims, err := utils.ValidateToken(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token: " + err.Error()})
 			c.Abort()

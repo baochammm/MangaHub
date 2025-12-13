@@ -7,10 +7,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
-	"github.com/baochammm/mangahub/internal/auth"
+	udpclient "github.com/baochammm/mangahub/mangahub/udp-client"
 	"github.com/baochammm/mangahub/package/models"
+	"github.com/baochammm/mangahub/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -22,12 +25,12 @@ var status string
 
 func getToken() string {
 	if token != "" {
-		auth.SaveToken(token)
+		utils.SaveToken(token)
 		return token
 	}
 
 	// otherwise load from cache
-	cached, err := auth.LoadToken()
+	cached, err := utils.LoadToken()
 	if err == nil && cached != "" {
 		return cached
 	}
@@ -157,7 +160,7 @@ func main() {
 
 	libraryListCmd.Flags().StringVar(&status, "status", "", "Filter by status: reading, completed, plan")
 
-	// add manga command
+	//#region add manga command
 	libraryAddCmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a manga to your library",
@@ -219,7 +222,7 @@ func main() {
 	libraryAddCmd.Flags().String("status", "", "Reading status: reading, completed, plan_to_read")
 	libraryAddCmd.Flags().Int("chapter", 0, "Optional: current chapter number")
 
-	//update manga command
+	//#region update manga command
 	libraryUpdateCmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update status for a manga in your library",
@@ -323,13 +326,13 @@ func main() {
 	}
 	libraryRemoveCmd.Flags().String("manga-id", "", "ID of the manga to remove")
 
-	// auth subcommands
+	//#region auth subcommands
 	authCmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authentication commands",
 	}
 
-	//login command
+	//#region login command
 	authLoginCmd := &cobra.Command{
 		Use: "login",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -365,14 +368,14 @@ func main() {
 			}
 
 			// save token
-			auth.SaveToken(result.Token)
+			utils.SaveToken(result.Token)
 
 			fmt.Println("Logged in successfully.")
 			return nil
 		},
 	}
 
-	//sign up command
+	//#region sign up command
 	authSignupCmd := &cobra.Command{
 		Use: "signup",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -403,7 +406,7 @@ func main() {
 		},
 	}
 
-	//logout command
+	//#region logout command
 	authLogoutCmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Logout and clear saved token",
@@ -423,7 +426,7 @@ func main() {
 			}
 
 			// clear token locally
-			if err := auth.ClearToken(); err != nil {
+			if err := utils.ClearToken(); err != nil {
 				return fmt.Errorf("failed to clear token: %v", err)
 			}
 
@@ -432,7 +435,7 @@ func main() {
 		},
 	}
 
-	// manga subcommands
+	// #region manga subcommands
 	mangaCmd := &cobra.Command{
 		Use:   "manga",
 		Short: "Manga commands",
@@ -509,6 +512,79 @@ func main() {
 			return nil
 		},
 	}
+	//#region notifications command
+	notifyCmd := &cobra.Command{
+		Use:   "notify",
+		Short: "Start UDP server to receive notifications",
+	}
+	notifySubscribeCmd := &cobra.Command{
+		Use:   "subscribe",
+		Short: "Start UDP server to receive notifications",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Starting UDP server to receive notifications...")
+
+			if err := udpclient.StartUDPServer(username); err != nil {
+				return fmt.Errorf("failed to start UDP server: %v", err)
+			}
+
+			fmt.Println("Listening for UDP notifications. Press Ctrl+C to exit.")
+
+			// Block until Ctrl+C
+			stop := make(chan os.Signal, 1)
+			signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+			<-stop
+
+			fmt.Println("\nShutting down UDP listener")
+			return nil
+		},
+	}
+	notifyAddCmd := &cobra.Command{
+		Use:   "add",
+		Short: "Subscribe to manga notifications",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mangaID, _ := cmd.Flags().GetString("manga")
+			if mangaID == "" {
+				return fmt.Errorf("--manga is required")
+			}
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+			req, err := http.NewRequest(
+				"POST",
+				baseURL+"/users/notifications/subscribe/"+mangaID,
+				nil,
+			)
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			if err != nil {
+				return err
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				errBody, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("subscription failed: %s", errBody)
+			}
+
+			fmt.Printf("✅ Subscribed to manga: %s\n", mangaID)
+			return nil
+		},
+	}
+
+	notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
+
+	notifyCmd.AddCommand(notifySubscribeCmd)
+	notifyCmd.AddCommand(notifyAddCmd)
+	rootCmd.AddCommand(notifyCmd)
+
 	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
 	mangaListCmd.Flags().StringSlice("genre", []string{}, "Filter manga by genres")
 	mangaListCmd.Flags().String("title", "", "Search manga by title")

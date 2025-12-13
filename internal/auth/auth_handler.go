@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 
+	"github.com/baochammm/mangahub/utils"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -60,7 +61,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokenString, err := GenerateJWT(user.UserID)
+	tokenString, err := utils.GenerateJWT(user.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
