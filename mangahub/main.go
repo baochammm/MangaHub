@@ -521,6 +521,39 @@ func main() {
 		Use:   "subscribe",
 		Short: "Start UDP server to receive notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+			//TODO: phần này đang hardcode UDP address, sẽ update sau WS
+			udp_addrress := "127.0.0.1:8082"
+			data := map[string]string{
+				"client_udp_addr": udp_addrress,
+			}
+			body, _ := json.Marshal(data)
+			req, err := http.NewRequest(
+				"POST",
+				baseURL+"/users/notifications/subscribe",
+				bytes.NewBuffer(body),
+			)
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			if err != nil {
+				return err
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				errBody, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("Subscribe to notifications failed: %s", errBody)
+			}
 			fmt.Println("Starting UDP server to receive notifications...")
 
 			if err := udpclient.StartUDPServer(username); err != nil {
