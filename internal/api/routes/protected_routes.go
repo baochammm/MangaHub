@@ -9,6 +9,7 @@ import (
 )
 
 func RegisterProtectedRoutes(router *gin.Engine) {
+
 	router.Use(middleware.AuthMiddleware())
 	userRepo := user.NewRepository(database.DB)
 	userHandler := user.NewHandler(userRepo)
@@ -22,4 +23,5 @@ func RegisterProtectedRoutes(router *gin.Engine) {
 	router.GET("/users/library/:status", userHandler.GetUserLibraryViaStatus) // mangahub library list --status=<status>
 	router.POST("/users/notifications/subscribe", udpHandler.ProcessUDPAddress)
 	router.POST("/users/notifications/subscribe/:manga", udpHandler.SubscribeToManga)
+
 }
