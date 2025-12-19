@@ -1,14 +1,16 @@
-package udp_listener
+package udp_client
 
 import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 )
 
-type NotificationSubscribeResponse struct {
-	Message string `json:"message"`
-	Success bool   `json:"success"`
+type Notification struct {
+	MangaID   string
+	Chapter   int64
+	Timestamp time.Time
 }
 
 func StartUDPListener(port int, serverID string) error {
@@ -40,10 +42,10 @@ func StartUDPListener(port int, serverID string) error {
 		raw := buffer[:n]
 
 		// Try parsing JSON
-		var resp NotificationSubscribeResponse
+		var resp Notification
 		if err := json.Unmarshal(raw, &resp); err == nil {
-			fmt.Printf("[JSON RECEIVED from %s]\nMessage: %s | Success: %v\n",
-				serverAddr, resp.Message, resp.Success,
+			fmt.Printf("[JSON RECEIVED from %s]\nManga: %s | Chapter: %d | Timestamp: %s\n",
+				serverAddr, resp.MangaID, resp.Chapter, resp.Timestamp,
 			)
 		} else {
 			fmt.Printf("[RAW RECEIVED from %s] %s\n", serverAddr, string(raw))
@@ -57,7 +59,7 @@ func StartUDPListener(port int, serverID string) error {
 
 func StartUDPServer(username string) error {
 	go func() {
-		if err := StartUDPListener(8082, username); err != nil {
+		if err := StartUDPListener(3002, username); err != nil {
 			fmt.Println("UDP listener error:", err)
 		}
 	}()

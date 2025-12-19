@@ -3,8 +3,10 @@ package main
 import (
 	"log"
 
+	udpserver "github.com/baochammm/mangahub/cmd/udp-server"
 	"github.com/baochammm/mangahub/internal/api/middleware"
 	"github.com/baochammm/mangahub/internal/api/routes"
+	"github.com/baochammm/mangahub/internal/udp"
 	"github.com/baochammm/mangahub/internal/websocket"
 	"github.com/baochammm/mangahub/package/database"
 	"github.com/joho/godotenv"
@@ -24,7 +26,12 @@ func main() {
 	// //WebSocket Server
 	hub := websocket.NewChatHub()
 	go hub.Run()
+	//UDP Server
+	udpRepo := udp.NewUDPRepository(database.DB)
+	udpHandler := udp.NewUDPHandler(udpRepo)
 
+	go udpserver.StartUDPServer(udpHandler)
+	// API Routes
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Welcome to MangaHub API! Available endpoints:  /manga [GET] - List all mangas,  /users [POST] - Create a new user,  /users/:user_id/reading-list [POST] - Add a reading entry for a user, /users/:user_id [GET] - Get user details with reading lists"})
 	})
