@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
-	udpclient "github.com/baochammm/mangahub/mangahub/udp-client"
+	udp_client "github.com/baochammm/mangahub/mangahub/udp-client"
 	"github.com/baochammm/mangahub/package/models"
 	"github.com/baochammm/mangahub/utils"
 	"github.com/spf13/cobra"
@@ -22,6 +24,11 @@ var username string
 var password string
 var token string
 var status string
+
+type UDPResponse struct {
+	Status  string `json:"status"`
+	Payload string `json:"payload"`
+}
 
 func getToken() string {
 	if token != "" {
@@ -517,104 +524,144 @@ func main() {
 		Use:   "notify",
 		Short: "Start UDP server to receive notifications",
 	}
-	notifySubscribeCmd := &cobra.Command{
-		Use:   "subscribe",
+	notifyRegisterCmd := &cobra.Command{
+		Use:   "register",
 		Short: "Start UDP server to receive notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jwt := getToken()
 			if jwt == "" {
 				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
 			}
-			//TODO: phần này đang hardcode UDP address, sẽ update sau WS
-			udp_addrress := "127.0.0.1:8082"
+			// Define response structure
+			type UDPResponse struct {
+				Status  string `json:"status"`
+				Payload string `json:"payload"`
+			}
+
+			udp_server_addr := "127.0.0.1:9091"
+			serverAddress, err := net.ResolveUDPAddr("udp", udp_server_addr)
+			if err != nil {
+				return fmt.Errorf("error resolving address: %v", err)
+			}
 			data := map[string]string{
-				"client_udp_addr": udp_addrress,
+				"action":  "register",
+				"token":   jwt,
+				"payload": "",
 			}
 			body, _ := json.Marshal(data)
-			req, err := http.NewRequest(
-				"POST",
-				baseURL+"/users/notifications/subscribe",
-				bytes.NewBuffer(body),
-			)
-			req.Header.Set("Authorization", "Bearer "+jwt)
-			req.Header.Set("Content-Type", "application/json")
+			conn, err := net.DialUDP("udp", nil, serverAddress)
+			if err != nil {
+				return fmt.Errorf("error connecting: %v", err)
+			}
+			defer conn.Close()
+
+			conn.Write([]byte(body))
+			if err != nil {
+				return fmt.Errorf("error sending register Message: %v", err)
+			}
+
+			buffer := make([]byte, 1024)
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 			if err != nil {
 				return err
 			}
-
-			resp, err := http.DefaultClient.Do(req)
-
+			n, err := conn.Read(buffer)
 			if err != nil {
-				return err
+				fmt.Println("Error receiving:", err)
+				return fmt.Errorf("error receiving register response: %v", err)
 			}
-			defer resp.Body.Close()
+			raw := buffer[:n]
 
-			if resp.StatusCode != http.StatusOK {
-				errBody, _ := io.ReadAll(resp.Body)
-				return fmt.Errorf("Subscribe to notifications failed: %s", errBody)
+			var resp UDPResponse
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return fmt.Errorf("invalid JSON response: %s", string(raw))
 			}
-			fmt.Println("Starting UDP server to receive notifications...")
-
-			if err := udpclient.StartUDPServer(username); err != nil {
+			if resp.Status != "success" {
+				return fmt.Errorf("registration failed: %s", resp.Payload)
+			}
+			fmt.Println("✅ UDP server registered for notifications.")
+			//TODO: start udp listener to receive notifications
+			if err := udp_client.StartUDPServer(username); err != nil {
 				return fmt.Errorf("failed to start UDP server: %v", err)
 			}
-
-			fmt.Println("Listening for UDP notifications. Press Ctrl+C to exit.")
-
-			// Block until Ctrl+C
+			fmt.Println("UDP Listener started on port 3002, waiting for notifications...")
 			stop := make(chan os.Signal, 1)
 			signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 			<-stop
 
 			fmt.Println("\nShutting down UDP listener")
+
 			return nil
 		},
 	}
 	notifyAddCmd := &cobra.Command{
-		Use:   "add",
+		Use:   "subscribe",
 		Short: "Subscribe to manga notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mangaID, _ := cmd.Flags().GetString("manga")
-			if mangaID == "" {
-				return fmt.Errorf("--manga is required")
-			}
 			jwt := getToken()
 			if jwt == "" {
 				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
 			}
-			req, err := http.NewRequest(
-				"POST",
-				baseURL+"/users/notifications/subscribe/"+mangaID,
-				nil,
-			)
-			req.Header.Set("Authorization", "Bearer "+jwt)
-			req.Header.Set("Content-Type", "application/json")
+			// Define response structure
+
+			udp_server_addr := "127.0.0.1:9091"
+			serverAddress, err := net.ResolveUDPAddr("udp", udp_server_addr)
+			if err != nil {
+				return fmt.Errorf("error resolving address: %v", err)
+			}
+			mangaID, _ := cmd.Flags().GetString("manga")
+			if mangaID == "" {
+				return fmt.Errorf("--manga required")
+			}
+			// payload := map[string]string{
+			// 	"manga_id": mangaID,
+			// }
+			data := map[string]string{
+				"action":  "subscribe",
+				"token":   jwt,
+				"payload": mangaID,
+			}
+			body, _ := json.Marshal(data)
+			conn, err := net.DialUDP("udp", nil, serverAddress)
+			if err != nil {
+				return fmt.Errorf("error connecting: %v", err)
+			}
+			defer conn.Close()
+
+			conn.Write([]byte(body))
+			if err != nil {
+				return fmt.Errorf("error sending subscribe Message: %v", err)
+			}
+
+			buffer := make([]byte, 1024)
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 			if err != nil {
 				return err
 			}
-
-			resp, err := http.DefaultClient.Do(req)
-
+			n, err := conn.Read(buffer)
 			if err != nil {
-				return err
+				fmt.Println("Error receiving:", err)
+				return fmt.Errorf("error receiving subscribe response: %v", err)
 			}
-			defer resp.Body.Close()
+			raw := buffer[:n]
 
-			if resp.StatusCode != http.StatusOK {
-				errBody, _ := io.ReadAll(resp.Body)
-				return fmt.Errorf("subscription failed: %s", errBody)
+			var resp UDPResponse
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return fmt.Errorf("invalid JSON response: %s", string(raw))
 			}
-
-			fmt.Printf("✅ Subscribed to manga: %s\n", mangaID)
+			if resp.Status != "success" {
+				return fmt.Errorf("subscription failed: %s", resp.Payload)
+			}
+			fmt.Println("✅ Subscribed to manga notifications successfully.")
 			return nil
 		},
 	}
 
 	notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
 
-	notifyCmd.AddCommand(notifySubscribeCmd)
+	notifyCmd.AddCommand(notifyRegisterCmd)
 	notifyCmd.AddCommand(notifyAddCmd)
 	rootCmd.AddCommand(notifyCmd)
 

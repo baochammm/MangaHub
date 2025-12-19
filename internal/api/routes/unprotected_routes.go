@@ -10,7 +10,8 @@ import (
 
 func RegisterUnProtectedRoutes(router *gin.Engine) {
 	mangaRepo := manga.NewRepository(database.DB)
-	udpHandler := udp.NewUDPHandler(udp.NewUDPRepository(database.DB))
+	udpRepo := udp.NewUDPRepository(database.DB)
+	udpHandler := udp.NewUDPHandler(udpRepo)
 	mangaHandler := manga.NewHandler(mangaRepo, udpHandler)
 
 	authRepo := auth.NewAuthRepository(database.DB)

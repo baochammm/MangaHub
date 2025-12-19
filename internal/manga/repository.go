@@ -178,3 +178,16 @@ func (r *Repository) UpdateManga(m models.Manga) (bool, error) {
 	return true, nil
 
 }
+
+func (r *Repository) ExistsByTitle(title string) (bool, error) {
+	row := r.DB.QueryRow(`
+		SELECT COUNT(1)
+		FROM mangas
+		WHERE id = ?
+	`, title)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}

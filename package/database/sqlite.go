@@ -51,7 +51,7 @@ func InitSQLite(path string) {
     	FOREIGN KEY (manga_id) REFERENCES mangas(id)
 	);
 	CREATE TABLE IF NOT EXISTS notifications (
-		user_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL PRIMARY KEY,
 		client_udp_addr TEXT NOT NULL,
 		FOREIGN KEY (user_id) REFERENCES users(id)
 		);
