@@ -6,11 +6,13 @@ import (
 	udpserver "github.com/baochammm/mangahub/cmd/udp-server"
 	"github.com/baochammm/mangahub/internal/api/middleware"
 	"github.com/baochammm/mangahub/internal/api/routes"
+	"github.com/baochammm/mangahub/internal/manga"
 	"github.com/baochammm/mangahub/internal/udp"
 	"github.com/baochammm/mangahub/internal/websocket"
 	"github.com/baochammm/mangahub/package/database"
 	"github.com/joho/godotenv"
 
+	grpcserver "github.com/baochammm/mangahub/cmd/grpc-server"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,6 +33,13 @@ func main() {
 	udpHandler := udp.NewUDPHandler(udpRepo)
 
 	go udpserver.StartUDPServer(udpHandler)
+	//gRPC Server
+	grpcRepo := *manga.NewRepository(database.DB)
+	go func() {
+		if err := grpcserver.StartGRPCServer(grpcRepo, 9092); err != nil {
+			log.Fatal("gRPC server failed:", err)
+		}
+	}()
 	// API Routes
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Welcome to MangaHub API! Available endpoints:  /manga [GET] - List all mangas,  /users [POST] - Create a new user,  /users/:user_id/reading-list [POST] - Add a reading entry for a user, /users/:user_id [GET] - Get user details with reading lists"})

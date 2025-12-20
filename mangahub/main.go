@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	grpcclient "github.com/baochammm/mangahub/mangahub/grpc-client"
 	udp_client "github.com/baochammm/mangahub/mangahub/udp-client"
 	"github.com/baochammm/mangahub/package/models"
 	"github.com/baochammm/mangahub/utils"
@@ -595,7 +596,8 @@ func main() {
 			return nil
 		},
 	}
-	notifyAddCmd := &cobra.Command{
+
+	notifySubscribeCmd := &cobra.Command{
 		Use:   "subscribe",
 		Short: "Subscribe to manga notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -659,10 +661,98 @@ func main() {
 		},
 	}
 
-	notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
+	//#region grpc client command
+	grpcCmd := &cobra.Command{
+		Use:   "grpc",
+		Short: "Start GRPC server to receive manga data",
+	}
+	grpcGetCmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get manga by ID via gRPC",
+		RunE: func(cmd *cobra.Command, args []string) error {
 
+			mangaID, _ := cmd.Flags().GetString("manga-id")
+			if mangaID == "" {
+				return fmt.Errorf("--manga-id required")
+			}
+
+			grpcclient.GetMangaByID(mangaID)
+			return nil
+			// title, _ := cmd.Flags().GetString("title")
+			// mangaID, _ := cmd.Flags().GetString("manga-id")
+
+			// req, err := http.NewRequest("GET", url, nil)
+			// if err != nil {
+			// 	return err
+			// }
+
+			// resp, err := http.DefaultClient.Do(req)
+			// if err != nil {
+			// 	return err
+			// }
+			// defer resp.Body.Close()
+
+			// if resp.StatusCode != 200 {
+			// 	body, _ := io.ReadAll(resp.Body)
+			// 	return fmt.Errorf("failed %s: %s", resp.Status, string(body))
+			// }
+
+			// if mangaID != "" || title != "" {
+			// 	var m interface{}
+			// 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+			// 		return err
+			// 	}
+
+			// 	raw, err := json.Marshal(m)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	fmt.Println(string(raw))
+			// 	return nil
+			// }
+
+			// var mangas []models.Manga
+			// if err := json.NewDecoder(resp.Body).Decode(&mangas); err != nil {
+			// 	return err
+			// }
+
+			// fmt.Println("📚 Manga List:")
+			// if len(mangas) == 0 {
+			// 	fmt.Println("No manga found.")
+			// 	return nil
+			// }
+
+			// for _, m := range mangas {
+			// 	fmt.Printf(" - %s (%s)\n", m.Title, m.ID)
+			// }
+
+			// return nil
+		},
+	}
+	gprcSearchCmd := &cobra.Command{
+		Use:   "search",
+		Short: "Search manga by title via gRPC",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keyword, _ := cmd.Flags().GetString("keyword")
+			if keyword == "" {
+				return fmt.Errorf("--keyword required")
+			}
+			page, _ := cmd.Flags().GetInt("page")
+			pageSize, _ := cmd.Flags().GetInt("page-size")
+			grpcclient.SearchManga(keyword, int32(page), int32(pageSize))
+			return nil
+		},
+	}
+	gprcSearchCmd.Flags().String("keyword", "", "Keyword to search manga titles")
+	gprcSearchCmd.Flags().Int("page", 1, "Page number")
+	gprcSearchCmd.Flags().Int("page-size", 10, "Number of results per page")
+	grpcGetCmd.Flags().String("manga-id", "", "ID of the manga to retrieve")
+	grpcCmd.AddCommand(grpcGetCmd)
+	grpcCmd.AddCommand(gprcSearchCmd)
+	notifySubscribeCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
 	notifyCmd.AddCommand(notifyRegisterCmd)
-	notifyCmd.AddCommand(notifyAddCmd)
+	notifyCmd.AddCommand(notifySubscribeCmd)
+	rootCmd.AddCommand(grpcCmd)
 	rootCmd.AddCommand(notifyCmd)
 
 	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
