@@ -12,6 +12,16 @@ type NotificationSubscribeResponse struct {
 	Message string `json:"message"`
 	Success bool   `json:"success"`
 }
+type UDPRequest struct {
+	Type string `json:"type"`
+}
+
+type DiscoverResponse struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
 
 func StartUDPListener(port int, h *udp.UDPHandler) error {
 
@@ -35,34 +45,58 @@ func StartUDPListener(port int, h *udp.UDPHandler) error {
 		n, clientAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			fmt.Println("Read error:", err)
-			continue // do NOT exit — keep listening
+			continue
 		}
 
 		raw := buffer[:n]
 
-		// Try parsing JSON
 		var req udp.UDPClientRequest
-		fmt.Printf("[RAW RECEIVED from %s] %s\n", clientAddr, string(raw))
 		if err := json.Unmarshal(raw, &req); err == nil {
-			fmt.Printf("[JSON RECEIVED from %s]\n Action: %v\n",
-				clientAddr, req.Action,
-			)
+			switch {
 
-			resp := h.ProcessUDPRequest(req.Action, req.Token, clientAddr.String(), req.Payload)
-			respBytes, err := json.Marshal(resp)
-			if err != nil {
-				fmt.Println("Error marshaling response:", err)
-				continue
+			case req.Type == "DISCOVER_MANGAHUB":
+				replyIP := GetReplyIP(clientAddr)
+
+				resp := DiscoverResponse{
+					Type: "MANGAHUB_OFFER",
+					Name: "mangahub-udp",
+					Host: replyIP.String(),
+					Port: port,
+				}
+				respBytes, _ := json.Marshal(resp)
+				conn.WriteToUDP(respBytes, clientAddr)
+
+				fmt.Printf("Discovery response sent to %s\n", clientAddr)
+			case req.Type == "MANGAHUB_REQUEST":
+				resp := h.ProcessUDPRequest(
+					req.Action,
+					req.Token,
+					clientAddr.String(),
+					req.Payload,
+				)
+
+				respBytes, err := json.Marshal(resp)
+				if err != nil {
+					fmt.Println("Error marshaling response:", err)
+				}
+				conn.WriteToUDP(respBytes, clientAddr)
+			default:
+				fmt.Printf("Unknown UDP request type from %s: %s\n", clientAddr.String(), req.Type)
 			}
-			conn.WriteToUDP(respBytes, clientAddr)
-
 		} else {
-			fmt.Printf("[RAW RECEIVED from %s] %s\n", clientAddr, string(raw))
-			fmt.Println("Error unmarshaling UDP request:", err)
+			fmt.Printf("Error unmarshaling UDP request from %s: %v\n", clientAddr.String(), err)
 		}
-
 	}
 
+}
+func GetReplyIP(clientAddr *net.UDPAddr) net.IP {
+	conn, err := net.DialUDP("udp", nil, clientAddr)
+	if err != nil {
+		return net.ParseIP("127.0.0.1")
+	}
+	defer conn.Close()
+
+	return conn.LocalAddr().(*net.UDPAddr).IP
 }
 
 func StartUDPServer(h *udp.UDPHandler) error {

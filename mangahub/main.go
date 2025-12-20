@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -46,6 +45,7 @@ func getToken() string {
 	return "" // no available token
 }
 func main() {
+
 	rootCmd := &cobra.Command{
 		Use:   "mangahub",
 		Short: "MangaHub CLI",
@@ -527,76 +527,42 @@ func main() {
 	}
 	notifyRegisterCmd := &cobra.Command{
 		Use:   "register",
-		Short: "Start UDP server to receive notifications",
+		Short: "Register this client for UDP notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jwt := getToken()
 			if jwt == "" {
-				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
-			}
-			// Define response structure
-			type UDPResponse struct {
-				Status  string `json:"status"`
-				Payload string `json:"payload"`
+				return fmt.Errorf("no token found. Please login first")
 			}
 
-			udp_server_addr := "127.0.0.1:9091"
-			serverAddress, err := net.ResolveUDPAddr("udp", udp_server_addr)
-			if err != nil {
-				return fmt.Errorf("error resolving address: %v", err)
+			// Start local UDP listener (client side)
+			if err := udp_client.StartUDPServer(username); err != nil {
+				return err
 			}
-			data := map[string]string{
-				"action":  "register",
-				"token":   jwt,
-				"payload": "",
-			}
-			body, _ := json.Marshal(data)
-			conn, err := net.DialUDP("udp", nil, serverAddress)
-			if err != nil {
-				return fmt.Errorf("error connecting: %v", err)
-			}
-			defer conn.Close()
+			fmt.Println("📡 UDP listener started on port 3002")
 
-			conn.Write([]byte(body))
-			if err != nil {
-				return fmt.Errorf("error sending register Message: %v", err)
-			}
-
-			buffer := make([]byte, 1024)
-			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-
+			// Discover server
+			serverAddr, err := udp_client.DiscoverUDPServer(2 * time.Second)
 			if err != nil {
 				return err
 			}
-			n, err := conn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error receiving:", err)
-				return fmt.Errorf("error receiving register response: %v", err)
+			if err := utils.SaveUDPServerAddr(serverAddr); err != nil {
+				return err
 			}
-			raw := buffer[:n]
+			// Register
+			if err := udp_client.RegisterUDPNotification(serverAddr, jwt); err != nil {
+				return err
+			}
+			fmt.Println("✅ Registered successfully, listener running...")
 
-			var resp UDPResponse
-			if err := json.Unmarshal(raw, &resp); err != nil {
-				return fmt.Errorf("invalid JSON response: %s", string(raw))
-			}
-			if resp.Status != "success" {
-				return fmt.Errorf("registration failed: %s", resp.Payload)
-			}
-			fmt.Println("✅ UDP server registered for notifications.")
-			//TODO: start udp listener to receive notifications
-			if err := udp_client.StartUDPServer(username); err != nil {
-				return fmt.Errorf("failed to start UDP server: %v", err)
-			}
-			fmt.Println("UDP Listener started on port 3002, waiting for notifications...")
+			// Block until exit
 			stop := make(chan os.Signal, 1)
 			signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 			<-stop
 
-			fmt.Println("\nShutting down UDP listener")
-
+			fmt.Println("\n👋 Shutting down UDP listener")
 			return nil
 		},
 	}
-
 	notifySubscribeCmd := &cobra.Command{
 		Use:   "subscribe",
 		Short: "Subscribe to manga notifications",
@@ -605,58 +571,19 @@ func main() {
 			if jwt == "" {
 				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
 			}
-			// Define response structure
-
-			udp_server_addr := "127.0.0.1:9091"
-			serverAddress, err := net.ResolveUDPAddr("udp", udp_server_addr)
-			if err != nil {
-				return fmt.Errorf("error resolving address: %v", err)
-			}
 			mangaID, _ := cmd.Flags().GetString("manga")
 			if mangaID == "" {
 				return fmt.Errorf("--manga required")
 			}
-			// payload := map[string]string{
-			// 	"manga_id": mangaID,
-			// }
-			data := map[string]string{
-				"action":  "subscribe",
-				"token":   jwt,
-				"payload": mangaID,
+			udp_server_addr, err := utils.LoadUDPServerAddr()
+			if err != nil || udp_server_addr == "" {
+				return fmt.Errorf("no UDP server cached. Run `mangahub notify register` first")
 			}
-			body, _ := json.Marshal(data)
-			conn, err := net.DialUDP("udp", nil, serverAddress)
-			if err != nil {
-				return fmt.Errorf("error connecting: %v", err)
-			}
-			defer conn.Close()
-
-			conn.Write([]byte(body))
-			if err != nil {
-				return fmt.Errorf("error sending subscribe Message: %v", err)
-			}
-
-			buffer := make([]byte, 1024)
-			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-
-			if err != nil {
+			// send subscribe request via UDP
+			if err := udp_client.SubscribeMangaUDP(udp_server_addr, jwt, mangaID); err != nil {
 				return err
 			}
-			n, err := conn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error receiving:", err)
-				return fmt.Errorf("error receiving subscribe response: %v", err)
-			}
-			raw := buffer[:n]
 
-			var resp UDPResponse
-			if err := json.Unmarshal(raw, &resp); err != nil {
-				return fmt.Errorf("invalid JSON response: %s", string(raw))
-			}
-			if resp.Status != "success" {
-				return fmt.Errorf("subscription failed: %s", resp.Payload)
-			}
-			fmt.Println("✅ Subscribed to manga notifications successfully.")
 			return nil
 		},
 	}
