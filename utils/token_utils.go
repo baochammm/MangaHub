@@ -20,9 +20,10 @@ type SignedDetails struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateJWT(userID int64) (string, error) {
+func GenerateJWT(userID int64, username string) (string, error) {
 	claims := &SignedDetails{
-		UserId: userID,
+		UserId:   userID,
+		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "MangaHub",
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),

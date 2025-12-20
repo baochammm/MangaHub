@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/baochammm/mangahub/internal/manga"
@@ -26,6 +27,7 @@ func ServeWS(hub *ChatHub) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"username error": err.Error()})
 			return
 		}
+		fmt.Printf("Username from context: %s", username)
 		room := c.Query("room")
 		if room == "" {
 			room = "general"

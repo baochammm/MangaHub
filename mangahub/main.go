@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,8 +16,10 @@ import (
 
 	grpcclient "github.com/baochammm/mangahub/mangahub/grpc-client"
 	udp_client "github.com/baochammm/mangahub/mangahub/udp-client"
+	websocket_client "github.com/baochammm/mangahub/mangahub/websocket"
 	"github.com/baochammm/mangahub/package/models"
 	"github.com/baochammm/mangahub/utils"
+	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 )
 
@@ -598,9 +602,9 @@ func main() {
 		Short: "Get manga by ID via gRPC",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			mangaID, _ := cmd.Flags().GetString("manga-id")
+			mangaID, _ := cmd.Flags().GetString("manga")
 			if mangaID == "" {
-				return fmt.Errorf("--manga-id required")
+				return fmt.Errorf("--manga required")
 			}
 
 			grpcclient.GetMangaByID(mangaID)
@@ -670,16 +674,72 @@ func main() {
 			return nil
 		},
 	}
+	//#region ws chat
+	chatCmd := &cobra.Command{
+		Use:   "chat",
+		Short: "Start GRPC server to receive manga data",
+	}
+	chatJoinCmd := &cobra.Command{
+		Use:   "join",
+		Short: "Start WebSocket chat client",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("not logged in")
+			}
+
+			room, _ := cmd.Flags().GetString("manga")
+			if room == "" {
+				room = "general"
+			}
+
+			wsURL := fmt.Sprintf(
+				"ws://localhost:8080/ws/chat?room=%s",
+
+				url.QueryEscape(room),
+			)
+
+			fmt.Println("Connecting to WebSocket chat server at", wsURL, "...")
+
+			header := http.Header{}
+			header.Set("Authorization", "Bearer "+jwt)
+
+			conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+
+			fmt.Println("✓ Connected to General Chat")
+			fmt.Println("Chat Room: #" + room)
+			fmt.Println("Your status: Online")
+			fmt.Println("Type messages and press Enter to send\n")
+
+			// Ctrl+C handling
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer stop()
+
+			go websocket_client.ReadMessages(ctx, conn)
+			go websocket_client.WriteMessages(ctx, conn)
+
+			<-ctx.Done()
+			fmt.Println("\nDisconnected.")
+			return nil
+		},
+	}
+	chatJoinCmd.Flags().String("manga", "", "Manga room to join (default: general)")
 	gprcSearchCmd.Flags().String("keyword", "", "Keyword to search manga titles")
 	gprcSearchCmd.Flags().Int("page", 1, "Page number")
 	gprcSearchCmd.Flags().Int("page-size", 10, "Number of results per page")
-	grpcGetCmd.Flags().String("manga-id", "", "ID of the manga to retrieve")
+	grpcGetCmd.Flags().String("manga", "", "ID of the manga to retrieve")
 	grpcCmd.AddCommand(grpcGetCmd)
 	grpcCmd.AddCommand(gprcSearchCmd)
 	notifySubscribeCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
 	notifyCmd.AddCommand(notifyRegisterCmd)
 	notifyCmd.AddCommand(notifySubscribeCmd)
+	chatCmd.AddCommand(chatJoinCmd)
 	rootCmd.AddCommand(grpcCmd)
+	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(notifyCmd)
 
 	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
