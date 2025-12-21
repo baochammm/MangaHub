@@ -3,7 +3,6 @@ package udp
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ type Notification struct {
 	Timestamp time.Time
 }
 type UDPClientRequest struct {
+	Type    string `json:"type"`
 	Action  string `json:"action"`
 	Token   string `json:"token"`
 	Payload string `json:"payload"`
@@ -41,7 +41,6 @@ func (h *UDPHandler) ProcessUDPRequest(action string, token string, clientAddr s
 	var UDPRes UDPResponse
 	//join user address and port 3002
 	clientAddrParts := strings.Split(clientAddr, ":")
-	log.Printf("Client address parts: %v\n", clientAddrParts)
 	clientAddr = fmt.Sprintf("%s:%d", clientAddrParts[0], 3002)
 	if token == "" {
 		UDPRes.Status = "error"

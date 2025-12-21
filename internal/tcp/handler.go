@@ -68,8 +68,8 @@ func (h *Hub) Broadcast(userID int64, payload any) {
 	}
 }
 
-func StartTCPServer(hub *Hub) error {
-	ln, err := net.Listen("tcp", ":9090")
+func StartTCPServer(hub *Hub, port int) error {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return err
 	}

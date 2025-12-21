@@ -16,8 +16,8 @@ type ProgressUpdateMessage struct {
 	DevicesSynced int       `json:"devices_synced"`
 }
 
-func StartSync(token, deviceID string) error {
-	conn, err := net.Dial("tcp", ":9090")
+func StartSync(token, deviceID, serverIP string) error {
+	conn, err := net.Dial("tcp", serverIP+":9090")
 	if err != nil {
 		return err
 	}

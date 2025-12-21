@@ -2,21 +2,25 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	grpcclient "github.com/baochammm/mangahub/mangahub/grpc-client"
 	tcpclient "github.com/baochammm/mangahub/mangahub/tcp-client"
 	udp_client "github.com/baochammm/mangahub/mangahub/udp-client"
+	websocket_client "github.com/baochammm/mangahub/mangahub/websocket"
 	"github.com/baochammm/mangahub/package/models"
 	"github.com/baochammm/mangahub/utils"
+	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +50,7 @@ func getToken() string {
 	return "" // no available token
 }
 func main() {
+
 	rootCmd := &cobra.Command{
 		Use:   "mangahub",
 		Short: "MangaHub CLI",
@@ -527,76 +532,43 @@ func main() {
 	}
 	notifyRegisterCmd := &cobra.Command{
 		Use:   "register",
-		Short: "Start UDP server to receive notifications",
+		Short: "Register this client for UDP notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jwt := getToken()
 			if jwt == "" {
-				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
-			}
-			// Define response structure
-			type UDPResponse struct {
-				Status  string `json:"status"`
-				Payload string `json:"payload"`
+				return fmt.Errorf("no token found. Please login first")
 			}
 
-			udp_server_addr := "127.0.0.1:9091"
-			serverAddress, err := net.ResolveUDPAddr("udp", udp_server_addr)
-			if err != nil {
-				return fmt.Errorf("error resolving address: %v", err)
+			// Start local UDP listener (client side)
+			if err := udp_client.StartUDPServer(username); err != nil {
+				return err
 			}
-			data := map[string]string{
-				"action":  "register",
-				"token":   jwt,
-				"payload": "",
-			}
-			body, _ := json.Marshal(data)
-			conn, err := net.DialUDP("udp", nil, serverAddress)
-			if err != nil {
-				return fmt.Errorf("error connecting: %v", err)
-			}
-			defer conn.Close()
+			fmt.Println("📡 UDP listener started on port 3002")
 
-			conn.Write([]byte(body))
-			if err != nil {
-				return fmt.Errorf("error sending register Message: %v", err)
-			}
-
-			buffer := make([]byte, 1024)
-			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-
+			// Discover server
+			serverAddr, err := udp_client.DiscoverUDPServer(2 * time.Second)
 			if err != nil {
 				return err
 			}
-			n, err := conn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error receiving:", err)
-				return fmt.Errorf("error receiving register response: %v", err)
+			if err := utils.SaveUDPServerAddr(serverAddr); err != nil {
+				return err
 			}
-			raw := buffer[:n]
+			// Register
+			if err := udp_client.RegisterUDPNotification(serverAddr, jwt); err != nil {
+				return err
+			}
+			fmt.Println("✅ Registered successfully, listener running...")
 
-			var resp UDPResponse
-			if err := json.Unmarshal(raw, &resp); err != nil {
-				return fmt.Errorf("invalid JSON response: %s", string(raw))
-			}
-			if resp.Status != "success" {
-				return fmt.Errorf("registration failed: %s", resp.Payload)
-			}
-			fmt.Println("✅ UDP server registered for notifications.")
-			//TODO: start udp listener to receive notifications
-			if err := udp_client.StartUDPServer(username); err != nil {
-				return fmt.Errorf("failed to start UDP server: %v", err)
-			}
-			fmt.Println("UDP Listener started on port 3002, waiting for notifications...")
+			// Block until exit
 			stop := make(chan os.Signal, 1)
 			signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 			<-stop
 
-			fmt.Println("\nShutting down UDP listener")
-
+			fmt.Println("\n👋 Shutting down UDP listener")
 			return nil
 		},
 	}
-	notifyAddCmd := &cobra.Command{
+	notifySubscribeCmd := &cobra.Command{
 		Use:   "subscribe",
 		Short: "Subscribe to manga notifications",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -604,58 +576,20 @@ func main() {
 			if jwt == "" {
 				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
 			}
-			// Define response structure
-
-			udp_server_addr := "127.0.0.1:9091"
-			serverAddress, err := net.ResolveUDPAddr("udp", udp_server_addr)
-			if err != nil {
-				return fmt.Errorf("error resolving address: %v", err)
-			}
 			mangaID, _ := cmd.Flags().GetString("manga")
 			if mangaID == "" {
 				return fmt.Errorf("--manga required")
 			}
-			// payload := map[string]string{
-			// 	"manga_id": mangaID,
-			// }
-			data := map[string]string{
-				"action":  "subscribe",
-				"token":   jwt,
-				"payload": mangaID,
+			udp_server_addr, err := utils.LoadUDPServerAddr()
+			if err != nil || udp_server_addr == "" {
+				return fmt.Errorf("no UDP server cached. Run `mangahub notify register` first")
 			}
-			body, _ := json.Marshal(data)
-			conn, err := net.DialUDP("udp", nil, serverAddress)
-			if err != nil {
-				return fmt.Errorf("error connecting: %v", err)
-			}
-			defer conn.Close()
-
-			conn.Write([]byte(body))
-			if err != nil {
-				return fmt.Errorf("error sending subscribe Message: %v", err)
-			}
-
-			buffer := make([]byte, 1024)
-			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-
-			if err != nil {
+			fmt.Printf("📡 Using UDP server at %s\n", udp_server_addr)
+			// send subscribe request via UDP
+			if err := udp_client.SubscribeMangaUDP(udp_server_addr, jwt, mangaID); err != nil {
 				return err
 			}
-			n, err := conn.Read(buffer)
-			if err != nil {
-				fmt.Println("Error receiving:", err)
-				return fmt.Errorf("error receiving subscribe response: %v", err)
-			}
-			raw := buffer[:n]
 
-			var resp UDPResponse
-			if err := json.Unmarshal(raw, &resp); err != nil {
-				return fmt.Errorf("invalid JSON response: %s", string(raw))
-			}
-			if resp.Status != "success" {
-				return fmt.Errorf("subscription failed: %s", resp.Payload)
-			}
-			fmt.Println("✅ Subscribed to manga notifications successfully.")
 			return nil
 		},
 	}
@@ -931,6 +865,7 @@ func main() {
 			return nil
 		},
 	}
+	//#region sync command
 	SyncCmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Start the reading progress",
@@ -944,12 +879,153 @@ func main() {
 				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
 			}
 			fmt.Println("Starting TCP sync client...")
-
+			serverIP, err := utils.LoadServerIPAddr()
+			if err != nil {
+				return fmt.Errorf("failed to load server IP address, please restart all servers again: %v", err)
+			}
 			deviceID := utils.DeviceID()
-			if err := tcpclient.StartSync(jwt, deviceID); err != nil {
+			if err := tcpclient.StartSync(jwt, deviceID, serverIP); err != nil {
 				return fmt.Errorf("failed to start TCP sync client: %v", err)
 			}
 
+			return nil
+		},
+	}
+	//#region grpc client command
+	grpcCmd := &cobra.Command{
+		Use:   "grpc",
+		Short: "Start GRPC server to receive manga data",
+	}
+	grpcGetCmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get manga by ID via gRPC",
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			mangaID, _ := cmd.Flags().GetString("manga")
+			if mangaID == "" {
+				return fmt.Errorf("--manga required")
+			}
+
+			grpcclient.GetMangaByID(mangaID)
+			return nil
+			// title, _ := cmd.Flags().GetString("title")
+			// mangaID, _ := cmd.Flags().GetString("manga-id")
+
+			// req, err := http.NewRequest("GET", url, nil)
+			// if err != nil {
+			// 	return err
+			// }
+
+			// resp, err := http.DefaultClient.Do(req)
+			// if err != nil {
+			// 	return err
+			// }
+			// defer resp.Body.Close()
+
+			// if resp.StatusCode != 200 {
+			// 	body, _ := io.ReadAll(resp.Body)
+			// 	return fmt.Errorf("failed %s: %s", resp.Status, string(body))
+			// }
+
+			// if mangaID != "" || title != "" {
+			// 	var m interface{}
+			// 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+			// 		return err
+			// 	}
+
+			// 	raw, err := json.Marshal(m)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	fmt.Println(string(raw))
+			// 	return nil
+			// }
+
+			// var mangas []models.Manga
+			// if err := json.NewDecoder(resp.Body).Decode(&mangas); err != nil {
+			// 	return err
+			// }
+
+			// fmt.Println("📚 Manga List:")
+			// if len(mangas) == 0 {
+			// 	fmt.Println("No manga found.")
+			// 	return nil
+			// }
+
+			// for _, m := range mangas {
+			// 	fmt.Printf(" - %s (%s)\n", m.Title, m.ID)
+			// }
+
+			// return nil
+		},
+	}
+	gprcSearchCmd := &cobra.Command{
+		Use:   "search",
+		Short: "Search manga by title via gRPC",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keyword, _ := cmd.Flags().GetString("keyword")
+			if keyword == "" {
+				return fmt.Errorf("--keyword required")
+			}
+			page, _ := cmd.Flags().GetInt("page")
+			pageSize, _ := cmd.Flags().GetInt("page-size")
+			grpcclient.SearchManga(keyword, int32(page), int32(pageSize))
+			return nil
+		},
+	}
+	//#region ws chat
+	chatCmd := &cobra.Command{
+		Use:   "chat",
+		Short: "Start GRPC server to receive manga data",
+	}
+	chatJoinCmd := &cobra.Command{
+		Use:   "join",
+		Short: "Start WebSocket chat client",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("not logged in")
+			}
+
+			room, _ := cmd.Flags().GetString("manga")
+			if room == "" {
+				room = "general"
+			}
+			serverIP, err := utils.LoadServerIPAddr()
+			if err != nil {
+				return fmt.Errorf("failed to load server IP address, please restart all servers again: %v", err)
+			}
+			wsURL := fmt.Sprintf(
+				"ws://%s:8080/ws/chat?room=%s",
+				serverIP,
+				url.QueryEscape(room),
+			)
+
+			fmt.Println("Connecting to WebSocket chat server at", wsURL, "...")
+
+			header := http.Header{}
+			header.Set("Authorization", "Bearer "+jwt)
+
+			conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+
+			fmt.Println("✓ Connected to General Chat")
+			fmt.Println("Chat Room: #" + room)
+			fmt.Println("Your status: Online")
+			fmt.Println("Type messages and press Enter to send\n")
+
+			// Ctrl+C handling
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer stop()
+
+			go websocket_client.ReadMessages(ctx, conn)
+			go websocket_client.WriteMessages(ctx, conn)
+
+			<-ctx.Done()
+			fmt.Println("\nDisconnected.")
 			return nil
 		},
 	}
@@ -971,10 +1047,21 @@ func main() {
 	progressCmd.AddCommand(progressSyncStatusCmd)
 	rootCmd.AddCommand(progressCmd)
 
-	notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
+	// notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
 
+	chatJoinCmd.Flags().String("manga", "", "Manga room to join (default: general)")
+	gprcSearchCmd.Flags().String("keyword", "", "Keyword to search manga titles")
+	gprcSearchCmd.Flags().Int("page", 1, "Page number")
+	gprcSearchCmd.Flags().Int("page-size", 10, "Number of results per page")
+	grpcGetCmd.Flags().String("manga", "", "ID of the manga to retrieve")
+	grpcCmd.AddCommand(grpcGetCmd)
+	grpcCmd.AddCommand(gprcSearchCmd)
+	notifySubscribeCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
 	notifyCmd.AddCommand(notifyRegisterCmd)
-	notifyCmd.AddCommand(notifyAddCmd)
+	notifyCmd.AddCommand(notifySubscribeCmd)
+	chatCmd.AddCommand(chatJoinCmd)
+	rootCmd.AddCommand(grpcCmd)
+	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(notifyCmd)
 
 	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
