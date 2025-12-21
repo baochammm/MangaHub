@@ -1,6 +1,7 @@
 package user
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -115,33 +116,93 @@ func (h *Handler) UpdateReadingProgress(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if entry.CurrentChapter == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current_chapter is required"})
-		return
-	}
+
 	if entry.MangaID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "manga_id is required"})
 		return
 	}
-	entry.LastUpdated = time.Now()
+	if entry.CurrentChapter <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "current_chapter must be > 0"})
+		return
+	}
 
-	var mangaExists bool
-	mangaExists, err = h.repo.IsMangaInUserLibrary(userID, entry.MangaID)
+	// check manga in library
+	exists, err := h.repo.IsMangaInUserLibrary(userID, entry.MangaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if !mangaExists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "manga not found in user library"})
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "manga not found in user library, add to library first"})
 		return
 	}
+	// validate chapter number
+	totalChapters, err := h.repo.GetMangaTotalChapters(entry.MangaID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if entry.CurrentChapter > totalChapters {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Chapter %d exceeds manga's total chapters (%d).Valid range: 1-%d", entry.CurrentChapter, totalChapters, totalChapters),
+		})
+		return
+	}
+
+	// get previous progress
+	prevEntry, err := h.repo.GetReadingEntry(userID, entry.MangaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get previous progress"})
+		return
+	}
+
+	// validate backward progress (force xử lý ở CLI hoặc thêm flag sau)
+	if entry.CurrentChapter < prevEntry.CurrentChapter {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "chapter is behind current progress",
+		})
+		return
+	}
+
+	if entry.CurrentChapter > prevEntry.CurrentChapter {
+		currentDate := time.Now()
+
+		_ = h.repo.LogReadingProgress(
+			userID,
+			entry.MangaID,
+			entry.CurrentChapter,
+			currentDate,
+		)
+	}
+
+	// update
+	entry.LastUpdated = time.Now()
 	if err := h.repo.UpdateReadingProgress(userID, entry); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "reading entry for manga " + entry.MangaID + " updated"})
+	// get updated progress
+	newEntry, err := h.repo.GetReadingEntry(userID, entry.MangaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get updated progress"})
+		return
+	}
+
+	// response cho CLI (KHÔNG HARDCODE)
+	c.JSON(http.StatusOK, gin.H{
+		"manga_title":         entry.MangaID, // nếu có bảng manga → join lấy title
+		"previous_chapter":    prevEntry.CurrentChapter,
+		"current_chapter":     newEntry.CurrentChapter,
+		"updated_at":          newEntry.LastUpdated,
+		"devices_synced":      0, // TCP server sẽ thay sau
+		"total_chapters_read": newEntry.CurrentChapter,
+		"reading_streak":      1,
+		"next_chapter":        newEntry.CurrentChapter + 1,
+	})
 }
+
 func (h *Handler) DeleteReadingEntry(c *gin.Context) {
 	userID, err := utils.GetUserIdFromContext(c)
 	if err != nil {
@@ -212,6 +273,67 @@ func (h *Handler) GetUserLibraryViaStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, readingLists)
+}
+
+func (h *Handler) GetProgressHistory(c *gin.Context) {
+	userID, err := utils.GetUserIdFromContext(c)
+	if err != nil {
+		c.JSON(401, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	mangaID := c.Query("manga_id")
+	var mid *string
+	if mangaID != "" {
+		mid = &mangaID
+	}
+
+	history, err := h.repo.GetReadingHistory(userID, mid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch reading history",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": userID,
+		"history": history,
+	})
+}
+
+func (h *Handler) SyncProgress(c *gin.Context) {
+	userID, err := utils.GetUserIdFromContext(c)
+	if err != nil {
+		c.JSON(401, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	err = h.repo.SyncReadingProgress(userID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "sync completed",
+	})
+}
+
+func (h *Handler) GetSyncStatus(c *gin.Context) {
+	userID, err := utils.GetUserIdFromContext(c)
+	if err != nil {
+		c.JSON(401, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	status, err := h.repo.GetSyncStatus(userID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, status)
 }
 
 //TODO: Update reading entry -> change status

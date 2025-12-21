@@ -45,6 +45,8 @@ func InitSQLite(path string) {
     	user_id TEXT NOT NULL,
     	manga_id TEXT NOT NULL,
     	current_chapter INTEGER,
+		volume INTEGER,
+		notes TEXT,
     	status TEXT CHECK(status IN ('reading', 'completed', 'plan_to_read')),
     	last_updated TEXT,
     	FOREIGN KEY (user_id) REFERENCES users(id),
@@ -61,6 +63,21 @@ func InitSQLite(path string) {
 		FOREIGN KEY (user_id) REFERENCES users(id),
 		FOREIGN KEY (manga_id) REFERENCES mangas(id)
 	);
+	CREATE TABLE IF NOT EXISTS reading_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		manga_id TEXT NOT NULL,
+		chapter INTEGER NOT NULL,
+		date_read DATE NOT NULL,
+
+		FOREIGN KEY (user_id) REFERENCES users(id),
+		FOREIGN KEY (manga_id) REFERENCES mangas(id)
+	);
+	CREATE TABLE IF NOT EXISTS sync_state (
+    user_id INTEGER PRIMARY KEY,
+    last_synced_at DATETIME NOT NULL
+);
+
 	`
 	if _, err := DB.Exec(createTables); err != nil {
 		log.Fatalf("failed to create tables: %v", err)
