@@ -7,7 +7,9 @@ import (
 	"github.com/baochammm/mangahub/internal/api/middleware"
 	"github.com/baochammm/mangahub/internal/api/routes"
 	"github.com/baochammm/mangahub/internal/manga"
+	"github.com/baochammm/mangahub/internal/tcp"
 	"github.com/baochammm/mangahub/internal/udp"
+	"github.com/baochammm/mangahub/internal/user"
 	"github.com/baochammm/mangahub/internal/websocket"
 	"github.com/baochammm/mangahub/package/database"
 	"github.com/joho/godotenv"
@@ -47,6 +49,17 @@ func main() {
 	r.GET("/ws/chat", middleware.AuthMiddleware(), websocket.ServeWS(hub))
 	routes.RegisterUnProtectedRoutes(r)
 	routes.RegisterProtectedRoutes(r)
+	//TCP Server
+	// TCP hub will be set in main.go
+	tcpHub := tcp.NewHub()
+	userRepo := user.NewRepository(database.DB)
+	userHandler := user.NewHandler(userRepo, tcpHub)
+	r.PATCH("/users/progress", middleware.AuthMiddleware(), userHandler.UpdateReadingProgress) // mangahub progress update --manga-id <id> --current-chapter <chapter>
+	go func() {
+		if err := tcp.StartTCPServer(tcpHub, 9090); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	if err := r.Run(":8080"); err != nil {
 		log.Fatal("server failed:", err)
 	}

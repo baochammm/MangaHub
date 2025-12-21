@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/baochammm/mangahub/internal/udp"
+	"github.com/baochammm/mangahub/utils"
 )
 
 type NotificationSubscribeResponse struct {
@@ -55,7 +56,7 @@ func StartUDPListener(port int, h *udp.UDPHandler) error {
 			switch {
 
 			case req.Type == "DISCOVER_MANGAHUB":
-				replyIP := GetReplyIP(clientAddr)
+				replyIP := utils.GetReplyIP(clientAddr)
 
 				resp := DiscoverResponse{
 					Type: "MANGAHUB_OFFER",
@@ -88,15 +89,6 @@ func StartUDPListener(port int, h *udp.UDPHandler) error {
 		}
 	}
 
-}
-func GetReplyIP(clientAddr *net.UDPAddr) net.IP {
-	conn, err := net.DialUDP("udp", nil, clientAddr)
-	if err != nil {
-		return net.ParseIP("127.0.0.1")
-	}
-	defer conn.Close()
-
-	return conn.LocalAddr().(*net.UDPAddr).IP
 }
 
 func StartUDPServer(h *udp.UDPHandler) error {

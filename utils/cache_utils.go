@@ -20,6 +20,16 @@ func SaveUDPServerAddr(addr string) error {
 		0600,
 	)
 }
+func LoadServerIPAddr() (string, error) {
+	data, err := os.ReadFile(
+		filepath.Join(configDir(), "udp_server"),
+	)
+	if err != nil {
+		return "", err
+	}
+	addr := strings.Split(string(data), ":")[0]
+	return strings.TrimSpace(addr), nil
+}
 
 func LoadUDPServerAddr() (string, error) {
 	data, err := os.ReadFile(
