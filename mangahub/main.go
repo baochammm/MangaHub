@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	tcpclient "github.com/baochammm/mangahub/mangahub/tcp-client"
 	udpclient "github.com/baochammm/mangahub/mangahub/udp-client"
 	"github.com/baochammm/mangahub/package/models"
 	"github.com/baochammm/mangahub/utils"
@@ -884,6 +885,31 @@ func main() {
 			return nil
 		},
 	}
+	SyncCmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Start the reading progress",
+	}
+	SyncConnectCmd := &cobra.Command{
+		Use:   "connect",
+		Short: "Connect to the sync server and start syncing",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+			fmt.Println("Starting TCP sync client...")
+
+			deviceID := utils.DeviceID()
+			if err := tcpclient.StartSync(jwt, deviceID); err != nil {
+				return fmt.Errorf("failed to start TCP sync client: %v", err)
+			}
+
+			return nil
+		},
+	}
+	//sync server
+	SyncCmd.AddCommand(SyncConnectCmd)
+	rootCmd.AddCommand(SyncCmd)
 
 	// flags
 	progressUpdateCmd.Flags().String("manga-id", "", "Manga ID")

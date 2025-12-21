@@ -5,17 +5,27 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/baochammm/mangahub/internal/tcp"
 	"github.com/baochammm/mangahub/package/models"
 	"github.com/baochammm/mangahub/utils"
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	repo *Repository
+	repo   *Repository
+	tcpHub *tcp.Hub
+}
+type ProgressUpdateMessage struct {
+	Type          string    `json:"type"`
+	MangaID       string    `json:"manga_id"`
+	Previous      int       `json:"previous_chapter"`
+	Current       int       `json:"current_chapter"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	DevicesSynced int       `json:"devices_synced"`
 }
 
-func NewHandler(repo *Repository) *Handler {
-	return &Handler{repo: repo}
+func NewHandler(repo *Repository, tcpHub *tcp.Hub) *Handler {
+	return &Handler{repo: repo, tcpHub: tcpHub}
 }
 
 func (h *Handler) AddReadingEntry(c *gin.Context) {
@@ -160,7 +170,7 @@ func (h *Handler) UpdateReadingProgress(c *gin.Context) {
 	// validate backward progress (force xử lý ở CLI hoặc thêm flag sau)
 	if entry.CurrentChapter < prevEntry.CurrentChapter {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "chapter is behind current progress",
+			"error": "chapter is behind current progress, run 'history' to view past progress",
 		})
 		return
 	}
@@ -190,17 +200,25 @@ func (h *Handler) UpdateReadingProgress(c *gin.Context) {
 		return
 	}
 
-	// response cho CLI (KHÔNG HARDCODE)
 	c.JSON(http.StatusOK, gin.H{
 		"manga_title":         entry.MangaID, // nếu có bảng manga → join lấy title
 		"previous_chapter":    prevEntry.CurrentChapter,
 		"current_chapter":     newEntry.CurrentChapter,
 		"updated_at":          newEntry.LastUpdated,
-		"devices_synced":      0, // TCP server sẽ thay sau
+		"devices_synced":      h.tcpHub.CountDevices(userID),
 		"total_chapters_read": newEntry.CurrentChapter,
 		"reading_streak":      1,
 		"next_chapter":        newEntry.CurrentChapter + 1,
 	})
+	h.tcpHub.Broadcast(userID, ProgressUpdateMessage{
+		Type:          "reading_progress_updated",
+		MangaID:       entry.MangaID,
+		Previous:      prevEntry.CurrentChapter,
+		Current:       newEntry.CurrentChapter,
+		UpdatedAt:     newEntry.LastUpdated,
+		DevicesSynced: h.tcpHub.CountDevices(userID),
+	})
+
 }
 
 func (h *Handler) DeleteReadingEntry(c *gin.Context) {

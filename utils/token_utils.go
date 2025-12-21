@@ -147,3 +147,7 @@ func ClearToken() error {
 	}
 	return os.Remove(path)
 }
+
+func DeviceID() string {
+	return fmt.Sprintf("device-%d", time.Now().UnixNano())
+}

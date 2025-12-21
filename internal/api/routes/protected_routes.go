@@ -11,12 +11,12 @@ import (
 func RegisterProtectedRoutes(router *gin.Engine) {
 	router.Use(middleware.AuthMiddleware())
 	userRepo := user.NewRepository(database.DB)
-	userHandler := user.NewHandler(userRepo)
+	userHandler := user.NewHandler(userRepo, nil) // TCP hub will be set in main.go
 	udpRepo := udp.NewUDPRepository(database.DB)
 	udpHandler := udp.NewUDPHandler(udpRepo)
-	router.POST("/users/library", userHandler.AddReadingEntry)                // mangahub library add
-	router.PATCH("/users/library", userHandler.UpdateReadingStatus)           // mangahub library update --manga-id <id> --status <new-status>
-	router.PATCH("/users/progress", userHandler.UpdateReadingProgress)        // mangahub progress update --manga-id <id> --current-chapter <chapter>
+	router.POST("/users/library", userHandler.AddReadingEntry)      // mangahub library add
+	router.PATCH("/users/library", userHandler.UpdateReadingStatus) // mangahub library update --manga-id <id> --status <new-status>
+	// router.PATCH("/users/progress", userHandler.UpdateReadingProgress)        // mangahub progress update --manga-id <id> --current-chapter <chapter>
 	router.GET("/users/progress/history", userHandler.GetProgressHistory)     // mangahub progress history --manga-id <id>
 	router.POST("/users/progress/sync", userHandler.SyncProgress)             // mangahub progress sync
 	router.GET("/users/progress/sync-status", userHandler.GetSyncStatus)      // mangahub progress sync-status
