@@ -865,6 +865,7 @@ func main() {
 			return nil
 		},
 	}
+	//#region sync command
 	SyncCmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Start the reading progress",
