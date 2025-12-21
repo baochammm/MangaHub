@@ -15,7 +15,8 @@ import (
 var jwtKey = []byte(os.Getenv("JWT_SECRET"))
 
 type SignedDetails struct {
-	UserId int64
+	UserId   int64
+	Username string
 	jwt.RegisteredClaims
 }
 
@@ -80,7 +81,6 @@ func ValidateToken(tokenString string) (*SignedDetails, error) {
 }
 func GetUserIdFromContext(c *gin.Context) (int64, error) {
 	userId, exists := c.Get("user_id")
-	fmt.Printf("User ID in context: %v, exists: %v\n", userId, exists)
 	if !exists {
 		return 0, errors.New("userId does not exist in this context")
 	}
@@ -104,6 +104,24 @@ func GetUserIdFromContext(c *gin.Context) (int64, error) {
 	default:
 		return 0, errors.New("unexpected type for userId")
 	}
+}
+func GetUserNameFromContext(c *gin.Context) (string, error) {
+	username, exists := c.Get("username")
+	if !exists {
+		return "", errors.New("username does not exist in this context")
+	}
+
+	switch v := username.(type) {
+	case string:
+		return v, nil
+	default:
+		return "", errors.New("unexpected type for username")
+	}
+}
+
+func ClearUserContext(c *gin.Context) {
+	c.Set("user_id", nil)
+	c.Set("username", nil)
 }
 
 func tokenFilePath() (string, error) {

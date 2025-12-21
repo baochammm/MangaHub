@@ -12,15 +12,28 @@ func NewUDPRepository(db *sql.DB) *UDPRepository {
 	return &UDPRepository{DB: db}
 }
 
-func (r *UDPRepository) CreateNotificationEntry(user_id int64, client_udp_addr string) error {
-	_, err := r.DB.Exec(
-		"INSERT INTO notifications (user_id, client_udp_addr) VALUES (?, ?)",
-		user_id, client_udp_addr,
-	)
+func (r *UDPRepository) CreateNotificationEntry(userID int64, addr string) error {
+	_, err := r.DB.Exec(`
+        INSERT INTO notifications (user_id, client_udp_addr)
+        VALUES (?, ?)
+        ON CONFLICT(user_id)
+        DO UPDATE SET client_udp_addr = excluded.client_udp_addr
+    `, userID, addr)
 	return err
 }
 func (r *UDPRepository) CreateSubscriptionEntry(user_id int64, manga_id string) error {
-	_, err := r.DB.Exec(
+	var count int
+	err := r.DB.QueryRow(
+		"SELECT COUNT(*) FROM mangas WHERE  id = ?",
+		manga_id,
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return sql.ErrNoRows
+	}
+	_, err = r.DB.Exec(
 		"INSERT INTO subscriptions (user_id, manga_id) VALUES (?, ?)",
 		user_id, manga_id,
 	)
@@ -87,4 +100,15 @@ func (r *UDPRepository) GetUsersUDPAddresses(user_id int64) string {
 		return ""
 	}
 	return client_udp_addr
+}
+func (r *UDPRepository) GetUserIdFromUsername(username string) (int64, error) {
+	var user_id int64
+	err := r.DB.QueryRow(
+		"SELECT id FROM users WHERE username = ?",
+		username,
+	).Scan(&user_id)
+	if err != nil {
+		return 0, err
+	}
+	return user_id, nil
 }
