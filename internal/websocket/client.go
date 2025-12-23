@@ -13,6 +13,7 @@ func ReadPump(hub *ChatHub, c *Client) {
 		c.Conn.Close()
 	}()
 
+	c.Conn.SetReadLimit(512)
 	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -22,10 +23,13 @@ func ReadPump(hub *ChatHub, c *Client) {
 	for {
 		_, msg, err := c.Conn.ReadMessage()
 		if err != nil {
+			log.Println("read error:", err)
 			break
 		}
 
+		// 🚨 THIS WAS MISSING
 		hub.Broadcast <- ChatMessage{
+			Type:      "chat",
 			Room:      firstRoom(c),
 			UserID:    c.ID,
 			Username:  c.Username,

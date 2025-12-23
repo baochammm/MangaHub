@@ -2,6 +2,7 @@ package manga
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/baochammm/mangahub/internal/udp"
@@ -25,7 +26,26 @@ func NewHandler(
 }
 
 func (h *Handler) GetAll(c *gin.Context) {
-	mangas, err := h.repo.GetAll()
+	page := c.Query("page")
+	pageSize := c.Query("page_size")
+
+	if page == "" {
+		page = "1"
+	}
+	if pageSize == "" {
+		pageSize = "20"
+	}
+	pageInt, err := strconv.Atoi(page)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page parameter"})
+		return
+	}
+	pageSizeInt, err := strconv.Atoi(pageSize)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size parameter"})
+		return
+	}
+	mangas, err := h.repo.GetAll(pageInt, pageSizeInt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

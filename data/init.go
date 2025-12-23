@@ -1,13 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/baochammm/mangahub/package/database"
-	"github.com/baochammm/mangahub/package/models"
 )
 
 func main() {
@@ -15,58 +15,180 @@ func main() {
 	database.InitSQLite(dbPath)
 
 	populateManga()
-	populateUsers()
+	// // populateUsers()
 	fmt.Println("Database created and populated successfully.")
+	// err := ExportMangaToJSON(database.DB, "mangas_export.json")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+}
+
+type MangaMeta struct {
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Author        string   `json:"author"`
+	Artist        string   `json:"artist"`
+	Genres        []string `json:"genres"`
+	ChapterCount  *int     `json:"chapter_count"`
+	VolumeCount   *int     `json:"volume_count"`
+	PublishedYear *int     `json:"published_year"`
+	Status        string   `json:"status"`
+	CoverURL      string   `json:"cover_url"`
+	Description   string   `json:"description"`
+	Popularity    *int     `json:"popularity"`
+	Ranking       *int     `json:"ranking"`
 }
 
 func populateManga() {
-	file, err := os.ReadFile("data/json/manga.json")
+	file, err := os.ReadFile("data/mangas_export.json")
 	if err != nil {
-		log.Fatalf("failed to read manga.json: %v", err)
+		log.Fatalf("failed to read json: %v", err)
 	}
 
-	var mangas []models.Manga
+	var mangas []MangaMeta
 	if err := json.Unmarshal(file, &mangas); err != nil {
-		log.Fatalf("failed to unmarshal JSON: %v", err)
+		log.Fatalf("failed to unmarshal json: %v", err)
 	}
+
+	stmt := `
+INSERT INTO mangas (
+  id,
+  title,
+  author,
+  artist,
+  genres,
+  chapter_count,
+  volume_count,
+  published_year,
+  status,
+  cover_url,
+  description,
+  popularity,
+  ranking
+) VALUES (
+  @id,
+  @title,
+  @author,
+  @artist,
+  @genres,
+  @chapter_count,
+  @volume_count,
+  @published_year,
+  @status,
+  @cover_url,
+  @description,
+  @popularity,
+  @ranking
+)
+ON CONFLICT(id) DO UPDATE SET
+  title          = excluded.title,
+  author         = excluded.author,
+  artist         = excluded.artist,
+  genres         = excluded.genres,
+  chapter_count  = excluded.chapter_count,
+  volume_count   = excluded.volume_count,
+  published_year = excluded.published_year,
+  status         = excluded.status,
+  cover_url      = excluded.cover_url,
+  description    = excluded.description,
+  popularity     = excluded.popularity,
+  ranking        = excluded.ranking;
+`
 
 	for _, m := range mangas {
-		genresJSON, _ := json.Marshal(m.Genres) // store array as JSON string
+		genresJSON, _ := json.Marshal(m.Genres)
 
-		_, err := database.DB.Exec(`
-			INSERT INTO mangas 
-			(id, title, author, artist, genres, chapter_count, published_year, status, cover_url, description)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			m.ID, m.Title, m.Author, m.Artist, string(genresJSON), m.ChapterCount,
-			m.PublishedYear, m.Status, m.CoverURL, m.Description,
+		_, err := database.DB.Exec(
+			stmt,
+			sql.Named("id", m.ID),
+			sql.Named("title", m.Title),
+			sql.Named("author", m.Author),
+			sql.Named("artist", m.Artist),
+			sql.Named("genres", string(genresJSON)),
+			sql.Named("chapter_count", m.ChapterCount),
+			sql.Named("volume_count", m.VolumeCount),
+			sql.Named("published_year", m.PublishedYear),
+			sql.Named("status", m.Status),
+			sql.Named("cover_url", m.CoverURL),
+			sql.Named("description", m.Description),
+			sql.Named("popularity", m.Popularity),
+			sql.Named("ranking", m.Ranking),
 		)
+
 		if err != nil {
-			log.Fatalf("failed to insert manga %s: %v", m.ID, err)
+			log.Printf("❌ Failed to import %s: %v", m.ID, err)
 		}
 	}
-	log.Printf("Inserted %d manga records.", len(mangas))
+
+	log.Println("✅ Manga seed import completed")
 }
 
-func populateUsers() {
-	file, err := os.ReadFile("data/json/user.json")
+func ExportMangaToJSON(db *sql.DB, outFile string) error {
+	rows, err := db.Query(`
+		SELECT
+			id,
+			title,
+			author,
+			artist,
+			genres,
+			chapter_count,
+			volume_count,
+			published_year,
+			status,
+			cover_url,
+			description,
+			popularity,
+			ranking
+		FROM mangas
+	`)
 	if err != nil {
-		log.Fatalf("failed to read user.json: %v", err)
+		return err
 	}
+	defer rows.Close()
 
-	var users []models.User
-	if err := json.Unmarshal(file, &users); err != nil {
-		log.Fatalf("failed to unmarshal JSON: %v", err)
-	}
-	for _, m := range users {
+	var result []MangaMeta
 
-		_, err := database.DB.Exec(`
-			INSERT INTO users 
-			(username, password_hash)
-			VALUES (?, ?)`,
-			m.Username, m.PasswordHash,
+	for rows.Next() {
+		var (
+			m      MangaMeta
+			rawGen string
+
+			artist sql.NullString
+		)
+
+		err := rows.Scan(
+			&m.ID,
+			&m.Title,
+			&m.Author,
+			&artist,
+			&rawGen, // 👈 JSON TEXT
+			&m.ChapterCount,
+			&m.VolumeCount,
+			&m.PublishedYear,
+			&m.Status,
+			&m.CoverURL,
+			&m.Description,
+			&m.Popularity,
+			&m.Ranking,
 		)
 		if err != nil {
-			log.Fatalf("failed to insert user %s: %v", m.Username, err)
+			return err
 		}
+		m.Artist = artist.String
+
+		// 🔥 Decode JSON string into []string
+		if err := json.Unmarshal([]byte(rawGen), &m.Genres); err != nil {
+			return fmt.Errorf("invalid genres JSON for %s: %v", m.ID, err)
+		}
+
+		result = append(result, m)
 	}
+
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(outFile, data, 0644)
 }

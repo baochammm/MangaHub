@@ -28,8 +28,11 @@ func InitSQLite(path string) {
 		artist TEXT,
 		genres TEXT,               -- stored as JSON array string
 		chapter_count INTEGER,
+		volume_count INTEGER,
 		published_year INTEGER,
 		status TEXT,
+		popularity INTEGER,
+		ranking INTEGER,
 		cover_url TEXT,
 		description TEXT
 	);
@@ -77,6 +80,20 @@ func InitSQLite(path string) {
     user_id INTEGER PRIMARY KEY,
     last_synced_at DATETIME NOT NULL
 );
+	CREATE TABLE IF NOT EXISTS chat_messages (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		room TEXT NOT NULL,
+		user_id INTEGER NOT NULL,
+		username TEXT NOT NULL,
+		message TEXT NOT NULL,
+		type TEXT NOT NULL,
+		online INTEGER,
+		timestamp INTEGER NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_chat_room_time
+	ON chat_messages(room, timestamp DESC);
+
 
 	`
 	if _, err := DB.Exec(createTables); err != nil {
