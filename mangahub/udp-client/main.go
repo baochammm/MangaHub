@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 )
 
@@ -33,12 +34,28 @@ func DiscoverUDPServer(timeout time.Duration) (string, error) {
 		return "", err
 	}
 
-	conn, err := net.ListenUDP("udp", nil)
+	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
 
+	rawConn, err := conn.SyscallConn()
+	if err != nil {
+		return "", err
+	}
+
+	rawConn.Control(func(fd uintptr) {
+		err := syscall.SetsockoptInt(
+			syscall.Handle(fd),
+			syscall.SOL_SOCKET,
+			syscall.SO_BROADCAST,
+			1,
+		)
+		if err != nil {
+			fmt.Println("Failed to enable broadcast:", err)
+		}
+	})
 	// Enable broadcast
 	conn.SetWriteBuffer(1024)
 

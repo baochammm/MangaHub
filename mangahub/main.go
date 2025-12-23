@@ -59,7 +59,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&password, "password", "", "Password for authentication")
 
 	rootCmd.PersistentFlags().StringVar(&token, "token", "", "JWT token (or set MANGAHUB_TEST_TOKEN)")
-	rootCmd.PersistentFlags().StringVar(&baseURL, "base", "http://localhost:8080", "Base URL for API")
+	rootCmd.PersistentFlags().StringVar(&baseURL, "base", "https://e1ac3aee598a.ngrok-free.app", "Base URL for API")
 
 	// library subcommands
 	libraryCmd := &cobra.Command{
@@ -462,6 +462,8 @@ func main() {
 			mangaID, _ := cmd.Flags().GetString("manga-id")
 			genres, _ := cmd.Flags().GetStringSlice("genre")
 			title, _ := cmd.Flags().GetString("title")
+			page, _ := cmd.Flags().GetString("page")
+			pageSize, _ := cmd.Flags().GetString("page-size")
 
 			var url string
 
@@ -474,7 +476,7 @@ func main() {
 				joined := strings.Join(genres, ",")
 				url = fmt.Sprintf("%s/manga/filter/genre?query=%s", baseURL, joined)
 			default:
-				url = baseURL + "/manga"
+				url = fmt.Sprintf("%s/manga?page=%s&page_size=%s", baseURL, page, pageSize)
 			}
 
 			req, err := http.NewRequest("GET", url, nil)
@@ -1067,6 +1069,8 @@ func main() {
 	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
 	mangaListCmd.Flags().StringSlice("genre", []string{}, "Filter manga by genres")
 	mangaListCmd.Flags().String("title", "", "Search manga by title")
+	mangaListCmd.Flags().String("page", "", "Page number for listing manga")
+	mangaListCmd.Flags().String("page-size", "", "Number of manga per page")
 
 	libraryCmd.AddCommand(libraryListCmd)
 	libraryCmd.AddCommand(libraryAddCmd)

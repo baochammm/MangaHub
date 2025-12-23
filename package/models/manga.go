@@ -7,6 +7,7 @@ type Manga struct {
 	Artist        string   `json:"artist" db:"artist"`
 	Genres        []string `json:"genres" db:"genres"`
 	ChapterCount  int      `json:"chapter_count" db:"chapter_count"`
+	VolumeCount   int      `json:"volume_count" db:"volume_count"`
 	PublishedYear int      `json:"published_year" db:"published_year"`
 	Status        string   `json:"status" db:"status"`
 	CoverURL      string   `json:"cover_url" db:"cover_url"`

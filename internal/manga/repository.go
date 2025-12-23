@@ -17,12 +17,14 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{DB: db}
 }
 
-func (r *Repository) GetAll() ([]models.Manga, error) {
+func (r *Repository) GetAll(page int, pageSize int) ([]models.Manga, error) {
 	rows, err := r.DB.Query(`
 		SELECT id, title, author, artist, genres, chapter_count,
 		       published_year, status, cover_url, description
 		FROM mangas
-	`)
+		LIMIT ? OFFSET ?
+	`, pageSize, (page-1)*pageSize)
+
 	if err != nil {
 		return nil, err
 	}

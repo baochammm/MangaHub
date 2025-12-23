@@ -29,6 +29,7 @@ func main() {
 
 	// //WebSocket Server
 	hub := websocket.NewChatHub()
+	hub.ChatRepo = websocket.NewRepository(database.DB)
 	go hub.Run()
 	//UDP Server
 	udpRepo := udp.NewUDPRepository(database.DB)

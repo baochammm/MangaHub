@@ -723,7 +723,7 @@
   {
     "id": 130826,
     "title": "Tian Guan Cifu",
-    "name": "heaven-officials-blessing",
+    "name": "tian-guan-ci-fu",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/3/258775l.jpg",
       "medium": "https://cdn.myanimelist.net/images/manga/3/258775.jpg"
@@ -2549,6 +2549,7 @@
   {
     "id": 9115,
     "title": "Ookami to Koushinryou",
+    "name": "spice-and-wolf",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/2/153860l.webp",
       "medium": "https://cdn.myanimelist.net/images/manga/2/153860.webp"
@@ -2624,6 +2625,7 @@
   {
     "id": 44227,
     "title": "Monogatari Series: Final Season",
+    "name": "monogatari-final",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/1/181554l.jpg",
       "medium": "https://cdn.myanimelist.net/images/manga/1/181554.jpg"
@@ -2688,6 +2690,7 @@
   {
     "id": 651,
     "title": "Kaze no Tani no Nausicaä",
+    "name": "nausicaa",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/3/259856l.webp",
       "medium": "https://cdn.myanimelist.net/images/manga/3/259856.webp"
@@ -2742,6 +2745,7 @@
   {
     "id": 147769,
     "title": "No Home",
+    "name": "no-home",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/3/264873l.webp",
       "medium": "https://cdn.myanimelist.net/images/manga/3/264873.webp"
@@ -2788,6 +2792,7 @@
   {
     "id": 86119,
     "title": "Honzuki no Gekokujou: Shisho ni Naru Tame ni wa Shudan wo Erandeiraremasen",
+    "name": "ascendance-of-a-bookworm",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/1/149552l.webp",
       "medium": "https://cdn.myanimelist.net/images/manga/1/149552.webp"
@@ -2844,6 +2849,7 @@
   {
     "id": 85781,
     "title": "Dungeon Meshi",
+    "name": "dungeon-meshi",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/3/148949l.jpg",
       "medium": "https://cdn.myanimelist.net/images/manga/3/148949.jpg"
@@ -2906,6 +2912,7 @@
   {
     "id": 26,
     "title": "Hunter x Hunter",
+    "name": "hunter-x-hunter",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/2/253119l.webp",
       "medium": "https://cdn.myanimelist.net/images/manga/2/253119.webp"
@@ -2960,6 +2967,7 @@
   {
     "id": 89357,
     "title": "Youkoso Jitsuryoku Shijou Shugi no Kyoushitsu e",
+    "name": "classroom-of-the-elite",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/2/177958l.webp",
       "medium": "https://cdn.myanimelist.net/images/manga/2/177958.webp"
@@ -3016,6 +3024,7 @@
   {
     "id": 100448,
     "title": "Jumyou wo Kaitotte Moratta. Ichinen ni Tsuki, Ichimanen de.",
+    "name": "i-sold-my-life-for-ten-thousand-yen-per-year",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/5/260043l.jpg",
       "medium": "https://cdn.myanimelist.net/images/manga/5/260043.jpg"
@@ -3071,6 +3080,7 @@
   {
     "id": 178182,
     "title": "On the Way to Meet Mom",
+    "name": "on-the-way-to-meet-mom",
     "main_picture": {
       "large": "https://cdn.myanimelist.net/images/manga/1/328009l.jpg",
       "medium": "https://cdn.myanimelist.net/images/manga/1/328009.jpg"
