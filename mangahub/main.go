@@ -59,7 +59,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&password, "password", "", "Password for authentication")
 
 	rootCmd.PersistentFlags().StringVar(&token, "token", "", "JWT token (or set MANGAHUB_TEST_TOKEN)")
-	rootCmd.PersistentFlags().StringVar(&baseURL, "base", "https://e1ac3aee598a.ngrok-free.app", "Base URL for API")
+	rootCmd.PersistentFlags().StringVar(&baseURL, "base", "http://localhost:8080", "Base URL for API")
 
 	// library subcommands
 	libraryCmd := &cobra.Command{
@@ -508,19 +508,19 @@ func main() {
 				fmt.Println(string(raw))
 				return nil
 			}
-
-			var mangas []models.Manga
-			if err := json.NewDecoder(resp.Body).Decode(&mangas); err != nil {
+			var result models.PaginatedMangasResponse
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				return err
 			}
 
 			fmt.Println("📚 Manga List:")
-			if len(mangas) == 0 {
+			if len(result.Items) == 0 {
 				fmt.Println("No manga found.")
 				return nil
 			}
-
-			for _, m := range mangas {
+			fmt.Printf("Page %d Result:\n", result.Page)
+			fmt.Printf("Total Items: %d | Total Pages: %d\n", result.TotalItems, result.TotalPages)
+			for _, m := range result.Items {
 				fmt.Printf(" - %s (%s)\n", m.Title, m.ID)
 			}
 

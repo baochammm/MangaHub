@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/baochammm/mangahub/package/models"
@@ -17,38 +18,60 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{DB: db}
 }
 
-func (r *Repository) GetAll(page int, pageSize int) ([]models.Manga, error) {
+func (r *Repository) GetAll(page int, pageSize int) (*models.PaginatedMangas, error) {
+	var totalItems int
+	err := r.DB.QueryRow(`SELECT COUNT(*) FROM mangas`).Scan(&totalItems)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := int(math.Ceil(float64(totalItems) / float64(pageSize)))
+
+	// 2. Fetch paginated rows
 	rows, err := r.DB.Query(`
 		SELECT id, title, author, artist, genres, chapter_count,
 		       published_year, status, cover_url, description
 		FROM mangas
 		LIMIT ? OFFSET ?
 	`, pageSize, (page-1)*pageSize)
-
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	var mangas []models.Manga
+
 	for rows.Next() {
 		var m models.Manga
-		var genresJSON string
+		var genresJSON sql.NullString
 
 		if err := rows.Scan(
-			&m.ID, &m.Title, &m.Author, &m.Artist, &genresJSON,
-			&m.ChapterCount, &m.PublishedYear, &m.Status,
-			&m.CoverURL, &m.Description,
+			&m.ID,
+			&m.Title,
+			&m.Author,
+			&m.Artist,
+			&genresJSON,
+			&m.ChapterCount,
+			&m.PublishedYear,
+			&m.Status,
+			&m.CoverURL,
+			&m.Description,
 		); err != nil {
 			return nil, err
 		}
 
-		if genresJSON != "" {
-			_ = json.Unmarshal([]byte(genresJSON), &m.Genres)
+		if genresJSON.Valid {
+			_ = json.Unmarshal([]byte(genresJSON.String), &m.Genres)
 		}
+
 		mangas = append(mangas, m)
 	}
-	return mangas, nil
+
+	return &models.PaginatedMangas{
+		Items:      mangas,
+		TotalItems: totalItems,
+		TotalPages: totalPages,
+	}, nil
 }
 func (r *Repository) GetByID(id string) (*models.Manga, error) {
 	row := r.DB.QueryRow(`
