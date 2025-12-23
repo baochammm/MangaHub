@@ -75,7 +75,7 @@ func (r *Repository) GetAll(page int, pageSize int) (*models.PaginatedMangas, er
 }
 func (r *Repository) GetByID(id string) (*models.Manga, error) {
 	row := r.DB.QueryRow(`
-		SELECT id, title, author, artist, genres, chapter_count, published_year, status, cover_url, description
+		SELECT id, title, author, artist, genres, chapter_count, volume_count, published_year, status, cover_url, description, ranking, popularity
 		FROM mangas WHERE id = ?
 	`, id)
 
@@ -83,8 +83,8 @@ func (r *Repository) GetByID(id string) (*models.Manga, error) {
 	var genresJSON string
 	if err := row.Scan(
 		&m.ID, &m.Title, &m.Author, &m.Artist, &genresJSON,
-		&m.ChapterCount, &m.PublishedYear, &m.Status,
-		&m.CoverURL, &m.Description,
+		&m.ChapterCount, &m.VolumeCount, &m.PublishedYear, &m.Status,
+		&m.CoverURL, &m.Description, &m.Ranking, &m.Popularity,
 	); err != nil {
 		return nil, err
 	}
@@ -95,14 +95,17 @@ func (r *Repository) GetByID(id string) (*models.Manga, error) {
 	return &m, nil
 }
 
-func (r *Repository) SearchByTitle(query string) ([]models.Manga, error) {
+func (r *Repository) Search(query string) ([]models.Manga, error) {
 	searchTerm := strings.ToLower(query)
 	rows, err := r.DB.Query(`
 		SELECT id, title, author, artist, genres, chapter_count,
-		       published_year, status, cover_url, description
+       	published_year, status, cover_url, description
 		FROM mangas
-		WHERE ' ' || LOWER(title) || ' ' LIKE '% ' || ? || ' %'
-	`, searchTerm)
+		WHERE
+		LOWER(title) LIKE '%' || LOWER(?) || '%'
+		OR LOWER(id) LIKE '%' || LOWER(?) || '%'
+
+	`, searchTerm, searchTerm)
 	if err != nil {
 		return nil, err
 	}
@@ -129,57 +132,109 @@ func (r *Repository) SearchByTitle(query string) ([]models.Manga, error) {
 	return mangas, nil
 }
 
-func (r *Repository) FilterByGenre(genres []string) ([]models.Manga, error) {
+func (r *Repository) FilterByGenre(
+	genres []string,
+	page int,
+	pageSize int,
+) (*models.PaginatedMangas, error) {
+
 	if len(genres) == 0 {
-		return nil, nil
+		return &models.PaginatedMangas{
+			Items:      []models.Manga{},
+			TotalItems: 0,
+			TotalPages: 0,
+		}, nil
 	}
 
-	placeholders := strings.Repeat("?,", len(genres))
-	placeholders = strings.TrimRight(placeholders, ",")
+	// Build placeholders (?, ?, ?)
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(genres)), ",")
 
-	args := make([]interface{}, len(genres))
-	for i, g := range genres {
-		args[i] = strings.ToLower(g)
+	// Prepare args
+	args := make([]interface{}, 0, len(genres)+1)
+	for _, g := range genres {
+		args = append(args, strings.ToLower(g))
 	}
 
-	query := fmt.Sprintf(`
+	// -----------------------------
+	// 1. COUNT query
+	// -----------------------------
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM mangas
+		WHERE (
+			SELECT COUNT(DISTINCT json_each.value)
+			FROM json_each(mangas.genres)
+			WHERE LOWER(json_each.value) IN (%s)
+		) = ?
+	`, placeholders)
+
+	var totalItems int
+	err := r.DB.QueryRow(countQuery, append(args, len(genres))...).Scan(&totalItems)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := int(math.Ceil(float64(totalItems) / float64(pageSize)))
+	offset := (page - 1) * pageSize
+
+	// -----------------------------
+	// 2. DATA query
+	// -----------------------------
+	dataQuery := fmt.Sprintf(`
 		SELECT id, title, author, artist, genres, chapter_count,
 		       published_year, status, cover_url, description
 		FROM mangas
 		WHERE (
 			SELECT COUNT(DISTINCT json_each.value)
-			FROM json_each(genres)
+			FROM json_each(mangas.genres)
 			WHERE LOWER(json_each.value) IN (%s)
 		) = ?
+		LIMIT ? OFFSET ?
 	`, placeholders)
 
-	rows, err := r.DB.Query(query, append(args, len(genres))...)
+	dataArgs := append(args, len(genres), pageSize, offset)
+
+	rows, err := r.DB.Query(dataQuery, dataArgs...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	var mangas []models.Manga
+
 	for rows.Next() {
 		var m models.Manga
-		var genresJSON string
+		var genresJSON sql.NullString
 
 		if err := rows.Scan(
-			&m.ID, &m.Title, &m.Author, &m.Artist, &genresJSON,
-			&m.ChapterCount, &m.PublishedYear, &m.Status,
-			&m.CoverURL, &m.Description,
+			&m.ID,
+			&m.Title,
+			&m.Author,
+			&m.Artist,
+			&genresJSON,
+			&m.ChapterCount,
+			&m.PublishedYear,
+			&m.Status,
+			&m.CoverURL,
+			&m.Description,
 		); err != nil {
 			return nil, err
 		}
 
-		if genresJSON != "" {
-			_ = json.Unmarshal([]byte(genresJSON), &m.Genres)
+		if genresJSON.Valid {
+			_ = json.Unmarshal([]byte(genresJSON.String), &m.Genres)
 		}
+
 		mangas = append(mangas, m)
 	}
 
-	return mangas, nil
+	return &models.PaginatedMangas{
+		Items:      mangas,
+		TotalItems: totalItems,
+		TotalPages: totalPages,
+	}, nil
 }
+
 func (r *Repository) UpdateManga(m models.Manga) (bool, error) {
 	var genresJSON string
 	if len(m.Genres) > 0 {

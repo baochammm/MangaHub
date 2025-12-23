@@ -459,7 +459,6 @@ func main() {
 		Short: "List all manga by genre, title or get manga  by ID",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			mangaID, _ := cmd.Flags().GetString("manga-id")
 			genres, _ := cmd.Flags().GetStringSlice("genre")
 			title, _ := cmd.Flags().GetString("title")
 			page, _ := cmd.Flags().GetString("page")
@@ -468,13 +467,11 @@ func main() {
 			var url string
 
 			switch {
-			case mangaID != "":
-				url = fmt.Sprintf("%s/manga/%s", baseURL, mangaID)
 			case title != "":
 				url = fmt.Sprintf("%s/manga/search?query=%s", baseURL, title)
 			case len(genres) > 0:
 				joined := strings.Join(genres, ",")
-				url = fmt.Sprintf("%s/manga/filter/genre?query=%s", baseURL, joined)
+				url = fmt.Sprintf("%s/manga/filter/genre?query=%s&page=%s&page_size=%s", baseURL, joined, page, pageSize)
 			default:
 				url = fmt.Sprintf("%s/manga?page=%s&page_size=%s", baseURL, page, pageSize)
 			}
@@ -495,7 +492,7 @@ func main() {
 				return fmt.Errorf("failed %s: %s", resp.Status, string(body))
 			}
 
-			if mangaID != "" || title != "" {
+			if title != "" {
 				var m interface{}
 				if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
 					return err
@@ -524,6 +521,46 @@ func main() {
 				fmt.Printf(" - %s (%s)\n", m.Title, m.ID)
 			}
 
+			return nil
+		},
+	}
+	mangaDetailCmd := &cobra.Command{
+		Use:   "detail",
+		Short: "Get manga details by ID",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mangaID, _ := cmd.Flags().GetString("manga")
+			if mangaID == "" {
+				return fmt.Errorf("--manga required")
+			}
+			req, err := http.NewRequest("GET", fmt.Sprintf("%s/manga/%s", baseURL, mangaID), nil)
+			if err != nil {
+				return err
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("failed %s: %s", resp.Status, string(body))
+			}
+			var manga models.Manga
+			if err := json.NewDecoder(resp.Body).Decode(&manga); err != nil {
+				return nil
+			}
+			fmt.Print("📖 Manga Details:\n")
+			fmt.Printf("ID: %s\n", manga.ID)
+			fmt.Printf("Title: %s\n", manga.Title)
+			fmt.Printf("Author: %s\n", manga.Author)
+			fmt.Printf("Artist: %s\n", manga.Artist)
+			fmt.Printf("Genres: %s\n", strings.Join(manga.Genres, ", "))
+			fmt.Printf("Chapters: %d\n", manga.ChapterCount)
+			fmt.Printf("Volumes: %d\n", manga.VolumeCount)
+			fmt.Printf("Published Year: %d\n", manga.PublishedYear)
+			fmt.Printf("Status: %s\n", manga.Status)
+			fmt.Printf("Popularity: %d\n", manga.Popularity)
+			fmt.Printf("Ranking: %d\n", manga.Ranking)
 			return nil
 		},
 	}
@@ -910,55 +947,7 @@ func main() {
 
 			grpcclient.GetMangaByID(mangaID)
 			return nil
-			// title, _ := cmd.Flags().GetString("title")
-			// mangaID, _ := cmd.Flags().GetString("manga-id")
 
-			// req, err := http.NewRequest("GET", url, nil)
-			// if err != nil {
-			// 	return err
-			// }
-
-			// resp, err := http.DefaultClient.Do(req)
-			// if err != nil {
-			// 	return err
-			// }
-			// defer resp.Body.Close()
-
-			// if resp.StatusCode != 200 {
-			// 	body, _ := io.ReadAll(resp.Body)
-			// 	return fmt.Errorf("failed %s: %s", resp.Status, string(body))
-			// }
-
-			// if mangaID != "" || title != "" {
-			// 	var m interface{}
-			// 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
-			// 		return err
-			// 	}
-
-			// 	raw, err := json.Marshal(m)
-			// 	if err != nil {
-			// 		return err
-			// 	}
-			// 	fmt.Println(string(raw))
-			// 	return nil
-			// }
-
-			// var mangas []models.Manga
-			// if err := json.NewDecoder(resp.Body).Decode(&mangas); err != nil {
-			// 	return err
-			// }
-
-			// fmt.Println("📚 Manga List:")
-			// if len(mangas) == 0 {
-			// 	fmt.Println("No manga found.")
-			// 	return nil
-			// }
-
-			// for _, m := range mangas {
-			// 	fmt.Printf(" - %s (%s)\n", m.Title, m.ID)
-			// }
-
-			// return nil
 		},
 	}
 	gprcSearchCmd := &cobra.Command{
@@ -1066,7 +1055,7 @@ func main() {
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(notifyCmd)
 
-	mangaListCmd.Flags().String("manga-id", "", "Get a manga by ID")
+	mangaDetailCmd.Flags().String("manga", "", "Get a manga by ID")
 	mangaListCmd.Flags().StringSlice("genre", []string{}, "Filter manga by genres")
 	mangaListCmd.Flags().String("title", "", "Search manga by title")
 	mangaListCmd.Flags().String("page", "", "Page number for listing manga")
@@ -1084,6 +1073,7 @@ func main() {
 	rootCmd.AddCommand(authCmd)
 
 	mangaCmd.AddCommand(mangaListCmd)
+	mangaCmd.AddCommand(mangaDetailCmd)
 	rootCmd.AddCommand(mangaCmd)
 
 	if err := rootCmd.Execute(); err != nil {
