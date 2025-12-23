@@ -45,12 +45,18 @@ func (h *Handler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size parameter"})
 		return
 	}
-	mangas, err := h.repo.GetAll(pageInt, pageSizeInt)
+	result, err := h.repo.GetAll(pageInt, pageSizeInt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, mangas)
+	c.JSON(http.StatusOK, gin.H{
+		"page":        pageInt,
+		"page_size":   pageSizeInt,
+		"total_pages": result.TotalPages,
+		"total_items": result.TotalItems,
+		"items":       result.Items,
+	})
 }
 
 func (h *Handler) GetByID(c *gin.Context) {

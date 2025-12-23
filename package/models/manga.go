@@ -13,3 +13,15 @@ type Manga struct {
 	CoverURL      string   `json:"cover_url" db:"cover_url"`
 	Description   string   `json:"description" db:"description"`
 }
+type PaginatedMangas struct {
+	Items      []Manga
+	TotalItems int
+	TotalPages int
+}
+type PaginatedMangasResponse struct {
+	Page       int     `json:"page"`
+	PageSize   int     `json:"page_size"`
+	TotalPages int     `json:"total_pages"`
+	TotalItems int     `json:"total_items"`
+	Items      []Manga `json:"items"`
+}
