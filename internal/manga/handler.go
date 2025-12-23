@@ -29,10 +29,10 @@ func (h *Handler) GetAll(c *gin.Context) {
 	page := c.Query("page")
 	pageSize := c.Query("page_size")
 
-	if page == "" {
+	if page == "" || page == "0" {
 		page = "1"
 	}
-	if pageSize == "" {
+	if pageSize == "" || pageSize == "0" {
 		pageSize = "20"
 	}
 	pageInt, err := strconv.Atoi(page)
@@ -87,6 +87,15 @@ func (h *Handler) SearchByTitle(c *gin.Context) {
 
 // filter manga by genre
 func (h *Handler) FilterByGenre(c *gin.Context) {
+	page := c.Query("page")
+	pageSize := c.Query("page_size")
+
+	if page == "" || page == "0" {
+		page = "1"
+	}
+	if pageSize == "" || pageSize == "0" {
+		pageSize = "20"
+	}
 	query := c.Query("query")
 	if query == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "need query parameter"})
@@ -97,14 +106,28 @@ func (h *Handler) FilterByGenre(c *gin.Context) {
 	for i := range genres {
 		genres[i] = strings.TrimSpace(strings.ToLower(genres[i]))
 	}
-
-	mangas, err := h.repo.FilterByGenre(genres)
+	pageInt, err := strconv.Atoi(page)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page parameter"})
+		return
+	}
+	pageSizeInt, err := strconv.Atoi(pageSize)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size parameter"})
+		return
+	}
+	result, err := h.repo.FilterByGenre(genres, pageInt, pageSizeInt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, mangas)
+	c.JSON(http.StatusOK, gin.H{
+		"page":        pageInt,
+		"page_size":   pageSizeInt,
+		"total_pages": result.TotalPages,
+		"total_items": result.TotalItems,
+		"items":       result.Items,
+	})
 }
 
 // special admin handler to update manga database
