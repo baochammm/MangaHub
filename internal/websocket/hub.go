@@ -106,12 +106,20 @@ func (hub *ChatHub) broadcastPresence(room string) {
 	}
 
 	r.mu.RLock()
-	count := len(r.Clients)
+	userSet := make(map[string]struct{})
+
+	for client := range r.Clients {
+		userSet[client.Username] = struct{}{}
+	}
+
+	count := len(userSet)
+
 	r.mu.RUnlock()
 
 	hub.Broadcast <- ChatMessage{
 		Type:      "presence",
 		Room:      room,
+		Username:  "System",
 		Online:    count,
 		Message:   "online users updated",
 		Timestamp: time.Now().Unix(),

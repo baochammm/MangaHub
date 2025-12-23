@@ -95,14 +95,17 @@ func (r *Repository) GetByID(id string) (*models.Manga, error) {
 	return &m, nil
 }
 
-func (r *Repository) SearchByTitle(query string) ([]models.Manga, error) {
+func (r *Repository) Search(query string) ([]models.Manga, error) {
 	searchTerm := strings.ToLower(query)
 	rows, err := r.DB.Query(`
 		SELECT id, title, author, artist, genres, chapter_count,
-		       published_year, status, cover_url, description
+       	published_year, status, cover_url, description
 		FROM mangas
-		WHERE ' ' || LOWER(title) || ' ' LIKE '% ' || ? || ' %'
-	`, searchTerm)
+		WHERE
+		LOWER(title) LIKE '%' || LOWER(?) || '%'
+		OR LOWER(id) LIKE '%' || LOWER(?) || '%'
+
+	`, searchTerm, searchTerm)
 	if err != nil {
 		return nil, err
 	}

@@ -77,7 +77,7 @@ func (h *Handler) SearchByTitle(c *gin.Context) {
 		return
 	}
 
-	mangas, err := h.repo.SearchByTitle(query)
+	mangas, err := h.repo.Search(query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
