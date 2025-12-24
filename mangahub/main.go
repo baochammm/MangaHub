@@ -1217,7 +1217,75 @@ func main() {
 			return nil
 		},
 	}
+	mangaChapterUpdateCmd := &cobra.Command{
+		Use:   "update-chapter",
+		Short: "Update manga chapter release in database (admin only)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
 
+			// Get flags
+			mangaID, _ := cmd.Flags().GetString("manga")
+
+			chapters, _ := cmd.Flags().GetInt("chapter")
+
+			if mangaID == "" {
+				return fmt.Errorf("--manga required")
+			}
+
+			if chapters < 0 {
+				return fmt.Errorf("--chapters must be > 0")
+			}
+			if chapters == 0 {
+				return fmt.Errorf("--chapter required")
+			}
+
+			// Build manga object
+			input := map[string]interface{}{
+				"manga_id": mangaID,
+				"chapter":  chapters,
+			}
+			// Marshal to JSON
+			reqBody, err := json.Marshal(input)
+			if err != nil {
+				return err
+			}
+
+			// Send PUT request to /admin/manga
+			req, err := http.NewRequest("PUT", baseURL+"/admin/manga/chapter-release", bytes.NewBuffer(reqBody))
+			if err != nil {
+				return err
+			}
+
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("failed %s: %s", resp.Status, string(body))
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return err
+			}
+
+			fmt.Println("✅ Manga updated successfully!")
+			fmt.Printf("Response: %v\n", result)
+			return nil
+		},
+	}
+	mangaChapterUpdateCmd.Flags().String("manga", "", "Manga ID (required)")
+	mangaChapterUpdateCmd.Flags().Int("chapter", 0, "New chapter count (required)")
+	mangaCmd.AddCommand(mangaChapterUpdateCmd)
 	mangaUpdateCmd.Flags().String("id", "", "Manga ID (required)")
 	mangaUpdateCmd.Flags().String("title", "", "Manga title")
 	mangaUpdateCmd.Flags().String("author", "", "Manga author")

@@ -21,5 +21,6 @@ func RegisterAdminRoutes(router *gin.Engine) {
 
 	// Admin-only routes
 	adminGroup.PUT("/manga", mangaHandler.UpdateManga) // create manga endpoint /localhost:8080/admin/manga
+	adminGroup.PUT("/manga/chapter-release", mangaHandler.UpdateMangaChapterRelease)
 
 }

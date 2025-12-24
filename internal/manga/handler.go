@@ -130,7 +130,7 @@ func (h *Handler) FilterByGenre(c *gin.Context) {
 	})
 }
 
-// special admin handler to update manga database
+// special admin handlers to update manga database
 func (h *Handler) UpdateManga(c *gin.Context) {
 	var m models.Manga
 	if err := c.ShouldBindJSON(&m); err != nil {
@@ -150,5 +150,26 @@ func (h *Handler) UpdateManga(c *gin.Context) {
 	// Notify subscribers if UDP handler is available
 	if h.udpHandler != nil {
 		h.udpHandler.NotifyNewChapter(m.ID, int64(m.ChapterCount))
+	}
+}
+func (h *Handler) UpdateMangaChapterRelease(c *gin.Context) {
+	var input struct {
+		MangaID      string `json:"manga_id"`
+		ChapterCount int    `json:"chapter"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	success, err := h.repo.UpdateMangaChapterRelease(input.MangaID, input.ChapterCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": success,
+		"message": "Manga chapter release updated successfully"})
+	if h.udpHandler != nil {
+		h.udpHandler.NotifyNewChapter(input.MangaID, int64(input.ChapterCount))
 	}
 }
