@@ -199,6 +199,7 @@ func (h *Handler) UpdateReadingProgress(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get updated progress"})
 		return
 	}
+	readingStreak, _ := h.repo.GetReadingStreak(userID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"manga_title":         entry.MangaID, // nếu có bảng manga → join lấy title
@@ -207,9 +208,10 @@ func (h *Handler) UpdateReadingProgress(c *gin.Context) {
 		"updated_at":          newEntry.LastUpdated,
 		"devices_synced":      h.tcpHub.CountDevices(userID),
 		"total_chapters_read": newEntry.CurrentChapter,
-		"reading_streak":      1,
+		"reading_streak":      readingStreak,
 		"next_chapter":        newEntry.CurrentChapter + 1,
 	})
+	// notify via TCP
 	h.tcpHub.Broadcast(userID, ProgressUpdateMessage{
 		Type:          "reading_progress_updated",
 		MangaID:       entry.MangaID,
@@ -353,5 +355,3 @@ func (h *Handler) GetSyncStatus(c *gin.Context) {
 
 	c.JSON(200, status)
 }
-
-//TODO: Update reading entry -> change status

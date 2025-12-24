@@ -71,14 +71,14 @@ func (r *Repository) UpdateReadingProgress(userID int64, entry models.ReadingEnt
 	if entry.Status != "" {
 		_, err := r.DB.Exec(`
 		UPDATE reading_list
-		SET status = ?, current_chapter = ?,  last_updated = ? 	
-		WHERE user_id = ? AND manga_id = ?
+		SET status = ?, current_chapter = ?,  last_updated = ? 
+		WHERE user_id = ? AND manga_id = ? 
 	`, entry.Status, entry.CurrentChapter, entry.LastUpdated.Format(time.RFC3339), userID, entry.MangaID)
 		return err
 	}
 	_, err := r.DB.Exec(`
 		UPDATE reading_list
-		SET current_chapter = ?, last_updated = ?, volume = COALESCE(?, volume), notes = COALESCE(?, notes)
+		SET current_chapter = ?, last_updated = ?, volume = COALESCE(?, volume), notes = COALESCE(?, notes), status = "reading"
 		WHERE user_id = ? AND manga_id = ?
 	`, entry.CurrentChapter, entry.LastUpdated.Format(time.RFC3339), entry.Volume, entry.Notes, userID, entry.MangaID)
 	return err

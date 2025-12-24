@@ -7,14 +7,18 @@ import (
 	"time"
 
 	pb "github.com/baochammm/mangahub/internal/grpc/manga"
+	"github.com/baochammm/mangahub/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
 func NewMangaClient() (pb.MangaServiceClient, func(), error) {
+
+	serverAddr, _ := utils.LoadServerIPAddr()
+	grpcAddress := fmt.Sprintf("%s:9092", serverAddr)
 	conn, err := grpc.NewClient(
-		"localhost:9092",
+		grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -34,11 +38,14 @@ func newContext() (context.Context, context.CancelFunc) {
 
 func StartGRPCClientServer() {
 	// Connect to server
-	conn, err := grpc.NewClient("localhost:9092",
+	serverAddr, _ := utils.LoadServerIPAddr()
+	grpcAddress := fmt.Sprintf("%s:9092", serverAddr)
+	conn, err := grpc.NewClient(grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
+	fmt.Println("Connected to gRPC server at", grpcAddress)
 	defer conn.Close()
 
 }
@@ -104,6 +111,37 @@ func SearchManga(keyword string, page, pageSize int32) error {
 			manga.Title,
 			manga.Author,
 		)
+	}
+
+	return nil
+}
+
+func UpdateProgress(userID int64, mangaID string, chapter int64) error {
+	client, cleanup, err := NewMangaClient()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ctx, cancel := newContext()
+	defer cancel()
+
+	resp, err := client.UpdateProgress(ctx, &pb.UpdateProgressRequest{
+		UserId:  userID,
+		MangaId: mangaID,
+		Chapter: chapter,
+	})
+	if err != nil {
+		st, _ := status.FromError(err)
+		return fmt.Errorf(st.Message())
+	}
+
+	if resp.Success {
+		fmt.Printf("✅ Progress updated successfully via gRPC!\n")
+		fmt.Printf("📖 Manga: %s | Chapter: %d\n", mangaID, chapter)
+		fmt.Println("📡 Broadcasting to synced devices...")
+	} else {
+		fmt.Println("❌ Update failed")
 	}
 
 	return nil

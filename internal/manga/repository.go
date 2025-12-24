@@ -258,6 +258,17 @@ func (r *Repository) UpdateManga(m models.Manga) (bool, error) {
 	return true, nil
 
 }
+func (r *Repository) UpdateMangaChapterRelease(id string, chapterCount int) (bool, error) {
+	_, err := r.DB.Exec(`
+		UPDATE mangas
+		SET chapter_count = ?
+		WHERE id = ?
+	`, chapterCount, id)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
 
 func (r *Repository) ExistsByTitle(title string) (bool, error) {
 	row := r.DB.QueryRow(`
