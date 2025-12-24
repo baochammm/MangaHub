@@ -24,6 +24,4 @@ func RegisterUnProtectedRoutes(router *gin.Engine) {
 	router.GET("/manga/filter/genre", mangaHandler.FilterByGenre) // filter manga by genre
 	router.GET("/manga/:id", mangaHandler.GetByID)
 
-	router.PUT("/manga", mangaHandler.UpdateManga) // create manga
-
 }

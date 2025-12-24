@@ -146,5 +146,9 @@ func (h *Handler) UpdateManga(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": success,
 		"message": "Manga database updated successfully"})
-	h.udpHandler.NotifyNewChapter(m.ID, int64(m.ChapterCount))
+
+	// Notify subscribers if UDP handler is available
+	if h.udpHandler != nil {
+		h.udpHandler.NotifyNewChapter(m.ID, int64(m.ChapterCount))
+	}
 }

@@ -17,13 +17,15 @@ var jwtKey = []byte(os.Getenv("JWT_SECRET"))
 type SignedDetails struct {
 	UserId   int64
 	Username string
+	Role     string
 	jwt.RegisteredClaims
 }
 
-func GenerateJWT(userID int64, username string) (string, error) {
+func GenerateJWT(userID int64, username string, role string) (string, error) {
 	claims := &SignedDetails{
 		UserId:   userID,
 		Username: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "MangaHub",
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
@@ -119,10 +121,22 @@ func GetUserNameFromContext(c *gin.Context) (string, error) {
 		return "", errors.New("unexpected type for username")
 	}
 }
-
+func GetUserRoleFromContext(c *gin.Context) (string, error) {
+	role, exists := c.Get("role")
+	if !exists {
+		return "", errors.New("role does not exist in this context")
+	}
+	switch v := role.(type) {
+	case string:
+		return v, nil
+	default:
+		return "", errors.New("unexpected type for role")
+	}
+}
 func ClearUserContext(c *gin.Context) {
 	c.Set("user_id", nil)
 	c.Set("username", nil)
+	c.Set("role", nil)
 }
 
 func tokenFilePath() (string, error) {

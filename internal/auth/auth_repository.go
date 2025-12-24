@@ -15,10 +15,10 @@ func NewAuthRepository(db *sql.DB) *AuthRepository {
 	return &AuthRepository{DB: db}
 }
 
-func (r *AuthRepository) CreateUser(username, passwordHash string) error {
+func (r *AuthRepository) CreateUser(username, passwordHash string, role string) error {
 	_, err := r.DB.Exec(
-		"INSERT INTO users (username, password_hash) VALUES (?, ?)",
-		username, passwordHash,
+		"INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+		username, passwordHash, role,
 	)
 	return err
 }
@@ -26,9 +26,9 @@ func (r *AuthRepository) CreateUser(username, passwordHash string) error {
 func (r *AuthRepository) FindByUsername(username string) (*models.User, error) {
 	user := models.User{}
 	err := r.DB.QueryRow(
-		"SELECT id, username, password_hash FROM users WHERE username = ?",
+		"SELECT id, username, password_hash, role FROM users WHERE username = ?",
 		username,
-	).Scan(&user.UserID, &user.Username, &user.PasswordHash)
+	).Scan(&user.UserID, &user.Username, &user.PasswordHash, &user.Role)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

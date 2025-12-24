@@ -27,22 +27,16 @@ func main() {
 	//REST API Router
 	r := gin.Default()
 
-	// //WebSocket Server
-	hub := websocket.NewChatHub()
-	hub.ChatRepo = websocket.NewRepository(database.DB)
-	go hub.Run()
 	//UDP Server
 	udpRepo := udp.NewUDPRepository(database.DB)
 	udpHandler := udp.NewUDPHandler(udpRepo)
 
 	go udpserver.StartUDPServer(udpHandler)
-	//gRPC Server
-	grpcRepo := *manga.NewRepository(database.DB)
-	go func() {
-		if err := grpcserver.StartGRPCServer(grpcRepo, 9092); err != nil {
-			log.Fatal("gRPC server failed:", err)
-		}
-	}()
+
+	// //WebSocket Server
+	hub := websocket.NewChatHub()
+	hub.ChatRepo = websocket.NewRepository(database.DB)
+	go hub.Run()
 	// API Routes
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Welcome to MangaHub API! Available endpoints:  /manga [GET] - List all mangas,  /users [POST] - Create a new user,  /users/:user_id/reading-list [POST] - Add a reading entry for a user, /users/:user_id [GET] - Get user details with reading lists"})
@@ -50,6 +44,7 @@ func main() {
 	r.GET("/ws/chat", middleware.AuthMiddleware(), websocket.ServeWS(hub))
 	routes.RegisterUnProtectedRoutes(r)
 	routes.RegisterProtectedRoutes(r)
+	routes.RegisterAdminRoutes(r)
 	//TCP Server
 	// TCP hub will be set in main.go
 	tcpHub := tcp.NewHub()
@@ -59,6 +54,13 @@ func main() {
 	go func() {
 		if err := tcp.StartTCPServer(tcpHub, 9090); err != nil {
 			log.Fatal(err)
+		}
+	}()
+	//gRPC Server
+	grpcRepo := *manga.NewRepository(database.DB)
+	go func() {
+		if err := grpcserver.StartGRPCServer(grpcRepo, tcpHub, 9092); err != nil {
+			log.Fatal("gRPC server failed:", err)
 		}
 	}()
 	if err := r.Run(":8080"); err != nil {

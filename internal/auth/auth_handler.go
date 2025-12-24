@@ -29,7 +29,7 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 	}
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	err := h.repo.CreateUser(input.Username, string(hashed))
+	err := h.repo.CreateUser(input.Username, string(hashed), "user")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "username already exists"})
 		return
@@ -61,7 +61,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokenString, err := utils.GenerateJWT(user.UserID, user.Username)
+	tokenString, err := utils.GenerateJWT(user.UserID, user.Username, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return

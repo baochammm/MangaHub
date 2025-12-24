@@ -3,18 +3,28 @@ package sv_grpc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	pb "github.com/baochammm/mangahub/internal/grpc/manga"
 	manga "github.com/baochammm/mangahub/internal/manga"
+	"github.com/baochammm/mangahub/internal/tcp"
+	"github.com/baochammm/mangahub/internal/user"
+	"github.com/baochammm/mangahub/package/models"
 )
 
 type Server struct {
 	pb.UnimplementedMangaServiceServer
-	repo manga.Repository
+	repo     manga.Repository
+	userRepo *user.Repository
+	tcpHub   *tcp.Hub
 }
 
-func NewServer(repo manga.Repository) *Server {
-	return &Server{repo: repo}
+func NewServer(repo manga.Repository, userRepo *user.Repository, tcpHub *tcp.Hub) *Server {
+	return &Server{
+		repo:     repo,
+		userRepo: userRepo,
+		tcpHub:   tcpHub,
+	}
 }
 
 /* ========== UC-014 ========== */
@@ -90,33 +100,89 @@ func (s *Server) Search(
 }
 
 /* ========== UC-016 ========== */
-//ToDo after tcp
-// func (s *Server) UpdateProgress(
-// 	ctx context.Context,
-// 	req *pb.UpdateProgressRequest,
-// ) (*pb.UpdateProgressResponse, error) {
+func (s *Server) UpdateProgress(
+	ctx context.Context,
+	req *pb.UpdateProgressRequest,
+) (*pb.UpdateProgressResponse, error) {
 
-// 	if req.UserId == 0 || req.MangaId == "" {
-// 		return nil, fmt.Errorf("invalid request")
-// 	}
+	if req.UserId == 0 || req.MangaId == "" {
+		return nil, fmt.Errorf("invalid request: user_id and manga_id are required")
+	}
 
-// 	err := s.repo.UpdateProgress(
-// 		req.UserId,
-// 		req.MangaId,
-// 		req.Chapter,
-// 	)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	if req.Chapter <= 0 {
+		return nil, fmt.Errorf("current_chapter must be > 0")
+	}
 
-// 	// Trigger TCP broadcast (real-time sync)
-// 	// go BroadcastProgressUpdate(
-// 	// 	req.UserId,
-// 	// 	req.MangaId,
-// 	// 	req.Chapter,
-// 	// )
+	// Check manga in library
+	exists, err := s.userRepo.IsMangaInUserLibrary(req.UserId, req.MangaId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check library: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("manga not found in user library, add to library first")
+	}
 
-// 	return &pb.UpdateProgressResponse{
-// 		Success: true,
-// 	}, nil
-// }
+	// Validate chapter number
+	totalChapters, err := s.userRepo.GetMangaTotalChapters(req.MangaId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total chapters: %w", err)
+	}
+
+	if int(req.Chapter) > totalChapters {
+		return nil, fmt.Errorf("chapter %d exceeds manga's total chapters (%d). Valid range: 1-%d",
+			req.Chapter, totalChapters, totalChapters)
+	}
+
+	// Get previous progress
+	prevEntry, err := s.userRepo.GetReadingEntry(req.UserId, req.MangaId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get previous progress: %w", err)
+	}
+
+	// Validate backward progress
+	if int(req.Chapter) < prevEntry.CurrentChapter {
+		return nil, fmt.Errorf("chapter is behind current progress, run 'history' to view past progress")
+	}
+
+	// Log reading progress if moving forward
+	if int(req.Chapter) > prevEntry.CurrentChapter {
+		currentDate := time.Now()
+		_ = s.userRepo.LogReadingProgress(
+			req.UserId,
+			req.MangaId,
+			int(req.Chapter),
+			currentDate,
+		)
+	}
+
+	// Update progress
+	entry := models.ReadingEntry{
+		MangaID:        req.MangaId,
+		CurrentChapter: int(req.Chapter),
+		LastUpdated:    time.Now(),
+	}
+
+	if err := s.userRepo.UpdateReadingProgress(req.UserId, entry); err != nil {
+		return nil, fmt.Errorf("failed to update progress: %w", err)
+	}
+
+	// Get updated progress
+	newEntry, err := s.userRepo.GetReadingEntry(req.UserId, req.MangaId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated progress: %w", err)
+	}
+
+	// Broadcast to TCP devices
+	s.tcpHub.Broadcast(req.UserId, user.ProgressUpdateMessage{
+		Type:          "reading_progress_updated",
+		MangaID:       req.MangaId,
+		Previous:      prevEntry.CurrentChapter,
+		Current:       newEntry.CurrentChapter,
+		UpdatedAt:     newEntry.LastUpdated,
+		DevicesSynced: s.tcpHub.CountDevices(req.UserId),
+	})
+
+	return &pb.UpdateProgressResponse{
+		Success: true,
+	}, nil
+}

@@ -939,6 +939,15 @@ func main() {
 		Use:   "get",
 		Short: "Get manga by ID via gRPC",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login first")
+			}
+
+			_, err := utils.ValidateToken(jwt)
+			if err != nil {
+				return fmt.Errorf("invalid token: %v", err)
+			}
 
 			mangaID, _ := cmd.Flags().GetString("manga")
 			if mangaID == "" {
@@ -954,6 +963,16 @@ func main() {
 		Use:   "search",
 		Short: "Search manga by title via gRPC",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login first")
+			}
+
+			_, err := utils.ValidateToken(jwt)
+			if err != nil {
+				return fmt.Errorf("invalid token: %v", err)
+			}
+
 			keyword, _ := cmd.Flags().GetString("keyword")
 			if keyword == "" {
 				return fmt.Errorf("--keyword required")
@@ -964,6 +983,35 @@ func main() {
 			return nil
 		},
 	}
+	grpcUpdateProgressCmd := &cobra.Command{
+		Use:   "update-progress",
+		Short: "Update reading progress via gRPC and broadcast to synced devices",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login first")
+			}
+
+			claims, err := utils.ValidateToken(jwt)
+			if err != nil {
+				return fmt.Errorf("invalid token: %v", err)
+			}
+
+			mangaID, _ := cmd.Flags().GetString("manga-id")
+			if mangaID == "" {
+				return fmt.Errorf("--manga-id required")
+			}
+
+			chapter, _ := cmd.Flags().GetInt("chapter")
+			if chapter <= 0 {
+				return fmt.Errorf("--chapter must be > 0")
+			}
+
+			// Use user ID from token claims
+			return grpcclient.UpdateProgress(claims.UserId, mangaID, int64(chapter))
+		},
+	}
+	//#endregion grpc
 	//#region ws chat
 	chatCmd := &cobra.Command{
 		Use:   "chat",
@@ -976,6 +1024,11 @@ func main() {
 			jwt := getToken()
 			if jwt == "" {
 				return fmt.Errorf("not logged in")
+			}
+
+			_, err := utils.ValidateToken(jwt)
+			if err != nil {
+				return fmt.Errorf("invalid token: %v", err)
 			}
 
 			room, _ := cmd.Flags().GetString("manga")
@@ -1045,8 +1098,11 @@ func main() {
 	gprcSearchCmd.Flags().Int("page", 1, "Page number")
 	gprcSearchCmd.Flags().Int("page-size", 10, "Number of results per page")
 	grpcGetCmd.Flags().String("manga", "", "ID of the manga to retrieve")
+	grpcUpdateProgressCmd.Flags().String("manga-id", "", "Manga ID")
+	grpcUpdateProgressCmd.Flags().Int("chapter", 0, "Chapter number")
 	grpcCmd.AddCommand(grpcGetCmd)
 	grpcCmd.AddCommand(gprcSearchCmd)
+	grpcCmd.AddCommand(grpcUpdateProgressCmd)
 	notifySubscribeCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
 	notifyCmd.AddCommand(notifyRegisterCmd)
 	notifyCmd.AddCommand(notifySubscribeCmd)
@@ -1061,6 +1117,120 @@ func main() {
 	mangaListCmd.Flags().String("page", "", "Page number for listing manga")
 	mangaListCmd.Flags().String("page-size", "", "Number of manga per page")
 
+	//#region manga update command (admin)
+	mangaUpdateCmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update manga in database (admin only)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+
+			// Get flags
+			mangaID, _ := cmd.Flags().GetString("id")
+			title, _ := cmd.Flags().GetString("title")
+			author, _ := cmd.Flags().GetString("author")
+			artist, _ := cmd.Flags().GetString("artist")
+			genres, _ := cmd.Flags().GetStringSlice("genres")
+			chapters, _ := cmd.Flags().GetInt("chapters")
+			volumes, _ := cmd.Flags().GetInt("volumes")
+			year, _ := cmd.Flags().GetInt("year")
+			mangaStatus, _ := cmd.Flags().GetString("status")
+			popularity, _ := cmd.Flags().GetInt("popularity")
+			ranking, _ := cmd.Flags().GetInt("ranking")
+
+			if mangaID == "" {
+				return fmt.Errorf("--id required")
+			}
+
+			// Build manga object
+			manga := models.Manga{
+				ID: mangaID,
+			}
+
+			// Only include fields that were explicitly set
+			if title != "" {
+				manga.Title = title
+			}
+			if author != "" {
+				manga.Author = author
+			}
+			if artist != "" {
+				manga.Artist = artist
+			}
+			if len(genres) > 0 {
+				manga.Genres = genres
+			}
+			if chapters > 0 {
+				manga.ChapterCount = chapters
+			}
+			if volumes > 0 {
+				manga.VolumeCount = volumes
+			}
+			if year > 0 {
+				manga.PublishedYear = year
+			}
+			if mangaStatus != "" {
+				manga.Status = mangaStatus
+			}
+			if popularity > 0 {
+				manga.Popularity = popularity
+			}
+			if ranking > 0 {
+				manga.Ranking = ranking
+			}
+
+			// Marshal to JSON
+			reqBody, err := json.Marshal(manga)
+			if err != nil {
+				return err
+			}
+
+			// Send PUT request to /admin/manga
+			req, err := http.NewRequest("PUT", baseURL+"/admin/manga", bytes.NewBuffer(reqBody))
+			if err != nil {
+				return err
+			}
+
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				return fmt.Errorf("failed %s: %s", resp.Status, string(body))
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return err
+			}
+
+			fmt.Println("✅ Manga updated successfully!")
+			fmt.Printf("Response: %v\n", result)
+			return nil
+		},
+	}
+
+	mangaUpdateCmd.Flags().String("id", "", "Manga ID (required)")
+	mangaUpdateCmd.Flags().String("title", "", "Manga title")
+	mangaUpdateCmd.Flags().String("author", "", "Manga author")
+	mangaUpdateCmd.Flags().String("artist", "", "Manga artist")
+	mangaUpdateCmd.Flags().StringSlice("genres", []string{}, "Manga genres")
+	mangaUpdateCmd.Flags().Int("chapters", 0, "Chapter count")
+	mangaUpdateCmd.Flags().Int("volumes", 0, "Volume count")
+	mangaUpdateCmd.Flags().Int("year", 0, "Published year")
+	mangaUpdateCmd.Flags().String("status", "", "Manga status (ongoing, completed)")
+	mangaUpdateCmd.Flags().Int("popularity", 0, "Popularity score")
+	mangaUpdateCmd.Flags().Int("ranking", 0, "Ranking")
+	//#endregion
+
 	libraryCmd.AddCommand(libraryListCmd)
 	libraryCmd.AddCommand(libraryAddCmd)
 	libraryCmd.AddCommand(libraryUpdateCmd)
@@ -1074,6 +1244,7 @@ func main() {
 
 	mangaCmd.AddCommand(mangaListCmd)
 	mangaCmd.AddCommand(mangaDetailCmd)
+	mangaCmd.AddCommand(mangaUpdateCmd)
 	rootCmd.AddCommand(mangaCmd)
 
 	if err := rootCmd.Execute(); err != nil {

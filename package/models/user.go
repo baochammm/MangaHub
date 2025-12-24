@@ -8,6 +8,7 @@ type User struct {
 	PasswordHash string        `json:"password_hash" db:"password_hash"`
 	CreatedAt    time.Time     `json:"created_at" db:"created_at"`
 	ReadingLists *ReadingLists `json:"reading_lists,omitempty"`
+	Role         string        `json:"role" db:"role"`
 }
 type ReadingEntry struct {
 	MangaID        string    `json:"manga_id" db:"manga_id"`
