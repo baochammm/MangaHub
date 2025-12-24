@@ -28,6 +28,7 @@ func NewHandler(
 func (h *Handler) GetAll(c *gin.Context) {
 	page := c.Query("page")
 	pageSize := c.Query("page_size")
+	sortBy := c.Query("sort_by") // Options: ranking, popularity, title
 
 	if page == "" || page == "0" {
 		page = "1"
@@ -45,7 +46,7 @@ func (h *Handler) GetAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size parameter"})
 		return
 	}
-	result, err := h.repo.GetAll(pageInt, pageSizeInt)
+	result, err := h.repo.GetAll(pageInt, pageSizeInt, sortBy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -89,6 +90,7 @@ func (h *Handler) SearchByTitle(c *gin.Context) {
 func (h *Handler) FilterByGenre(c *gin.Context) {
 	page := c.Query("page")
 	pageSize := c.Query("page_size")
+	sortBy := c.Query("sort_by") // Options: ranking, popularity, title
 
 	if page == "" || page == "0" {
 		page = "1"
@@ -116,7 +118,7 @@ func (h *Handler) FilterByGenre(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size parameter"})
 		return
 	}
-	result, err := h.repo.FilterByGenre(genres, pageInt, pageSizeInt)
+	result, err := h.repo.FilterByGenre(genres, pageInt, pageSizeInt, sortBy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

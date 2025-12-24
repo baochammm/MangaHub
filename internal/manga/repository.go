@@ -18,7 +18,7 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{DB: db}
 }
 
-func (r *Repository) GetAll(page int, pageSize int) (*models.PaginatedMangas, error) {
+func (r *Repository) GetAll(page int, pageSize int, sortBy string) (*models.PaginatedMangas, error) {
 	var totalItems int
 	err := r.DB.QueryRow(`SELECT COUNT(*) FROM mangas`).Scan(&totalItems)
 	if err != nil {
@@ -27,13 +27,29 @@ func (r *Repository) GetAll(page int, pageSize int) (*models.PaginatedMangas, er
 
 	totalPages := int(math.Ceil(float64(totalItems) / float64(pageSize)))
 
-	// 2. Fetch paginated rows
-	rows, err := r.DB.Query(`
+	// Determine ORDER BY clause based on sortBy parameter
+	orderBy := "id" // default
+	switch strings.ToLower(sortBy) {
+	case "ranking":
+		orderBy = "ranking ASC"
+	case "popularity":
+		orderBy = "popularity ASC"
+	case "title":
+		orderBy = "title ASC"
+	default:
+		orderBy = "id"
+	}
+
+	// 2. Fetch paginated rows with sorting
+	query := fmt.Sprintf(`
 		SELECT id, title, author, artist, genres, chapter_count,
-		       published_year, status, cover_url, description
+		       published_year, status, cover_url, description, ranking, popularity
 		FROM mangas
+		ORDER BY %s
 		LIMIT ? OFFSET ?
-	`, pageSize, (page-1)*pageSize)
+	`, orderBy)
+
+	rows, err := r.DB.Query(query, pageSize, (page-1)*pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +72,8 @@ func (r *Repository) GetAll(page int, pageSize int) (*models.PaginatedMangas, er
 			&m.Status,
 			&m.CoverURL,
 			&m.Description,
+			&m.Ranking,
+			&m.Popularity,
 		); err != nil {
 			return nil, err
 		}
@@ -136,6 +154,7 @@ func (r *Repository) FilterByGenre(
 	genres []string,
 	page int,
 	pageSize int,
+	sortBy string,
 ) (*models.PaginatedMangas, error) {
 
 	if len(genres) == 0 {
@@ -153,6 +172,19 @@ func (r *Repository) FilterByGenre(
 	args := make([]interface{}, 0, len(genres)+1)
 	for _, g := range genres {
 		args = append(args, strings.ToLower(g))
+	}
+
+	// Determine ORDER BY clause based on sortBy parameter
+	orderBy := "id" // default
+	switch strings.ToLower(sortBy) {
+	case "ranking":
+		orderBy = "ranking ASC"
+	case "popularity":
+		orderBy = "popularity ASC"
+	case "title":
+		orderBy = "title ASC"
+	default:
+		orderBy = "id"
 	}
 
 	// -----------------------------
@@ -178,19 +210,20 @@ func (r *Repository) FilterByGenre(
 	offset := (page - 1) * pageSize
 
 	// -----------------------------
-	// 2. DATA query
+	// 2. DATA query with sorting
 	// -----------------------------
 	dataQuery := fmt.Sprintf(`
 		SELECT id, title, author, artist, genres, chapter_count,
-		       published_year, status, cover_url, description
+		       published_year, status, cover_url, description, ranking, popularity
 		FROM mangas
 		WHERE (
 			SELECT COUNT(DISTINCT json_each.value)
 			FROM json_each(mangas.genres)
 			WHERE LOWER(json_each.value) IN (%s)
 		) = ?
+		ORDER BY %s
 		LIMIT ? OFFSET ?
-	`, placeholders)
+	`, placeholders, orderBy)
 
 	dataArgs := append(args, len(genres), pageSize, offset)
 
@@ -217,6 +250,8 @@ func (r *Repository) FilterByGenre(
 			&m.Status,
 			&m.CoverURL,
 			&m.Description,
+			&m.Ranking,
+			&m.Popularity,
 		); err != nil {
 			return nil, err
 		}
