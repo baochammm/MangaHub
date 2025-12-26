@@ -1073,9 +1073,107 @@ func main() {
 			return nil
 		},
 	}
+	// Start command - runs all listeners in one command
+	startCmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start all listeners (TCP sync + UDP notifications)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jwt := getToken()
+			if jwt == "" {
+				return fmt.Errorf("no token found. Please login using: mangahub auth login --username USER --password PASS")
+			}
+
+			fmt.Println("🚀 Starting MangaHub Client...")
+			fmt.Println("=" + strings.Repeat("=", 50))
+
+			// STEP 1: Discover server via UDP first to ensure all services have the server IP
+			fmt.Println("\n🔍 Discovering server...")
+
+			// Start local UDP listener
+			if err := udp_client.StartUDPServer(username); err != nil {
+				return fmt.Errorf("failed to start UDP listener: %v", err)
+			}
+			fmt.Println("✅ UDP listener started on port 3002")
+
+			// Discover server and save the address
+			serverAddr, err := udp_client.DiscoverUDPServer(2 * time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to discover server: %v", err)
+			}
+
+			// Save server address so all processes (library, grpc, chat, etc.) can use it
+			if err := utils.SaveUDPServerAddr(serverAddr); err != nil {
+				return fmt.Errorf("failed to save server address: %v", err)
+			}
+
+			// Extract and verify server IP is accessible
+			serverIP, err := utils.LoadServerIPAddr()
+			if err != nil {
+				return fmt.Errorf("failed to extract server IP: %v", err)
+			}
+			fmt.Printf("✅ Server discovered at %s (full address: %s)\n", serverIP, serverAddr)
+
+			// Context for graceful shutdown
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Channel to collect errors from goroutines
+			errChan := make(chan error, 2)
+
+			// STEP 2: Start TCP sync client (now guaranteed to have server IP)
+			go func() {
+				fmt.Println("\n📡 Starting TCP sync client...")
+				deviceID := utils.DeviceID()
+				if err := tcpclient.StartSync(jwt, deviceID, serverIP); err != nil {
+					errChan <- fmt.Errorf("TCP: %v", err)
+					return
+				}
+			}()
+
+			// STEP 3: Register UDP notifications
+			go func() {
+				fmt.Println("📡 Registering UDP notifications...")
+				if err := udp_client.RegisterUDPNotification(serverAddr, jwt); err != nil {
+					errChan <- fmt.Errorf("UDP: failed to register: %v", err)
+					return
+				}
+				fmt.Println("✅ UDP registered successfully")
+			}()
+
+			// Give everything time to initialize
+			time.Sleep(1 * time.Second)
+
+			fmt.Println("\n" + strings.Repeat("=", 50))
+			fmt.Println("✅ All services started successfully!")
+			fmt.Println("📝 Services running:")
+			fmt.Printf("   • Server IP: %s (cached for all processes)\n", serverIP)
+			fmt.Println("   • TCP Sync Client - Real-time progress synchronization")
+			fmt.Println("   • UDP Listener - Manga update notifications")
+			fmt.Println("\n💡 All commands (library, grpc, chat) now have access to server IP")
+			fmt.Println("💡 Press Ctrl+C to stop all services")
+			fmt.Println(strings.Repeat("=", 50))
+
+			// Wait for interrupt signal or errors
+			stop := make(chan os.Signal, 1)
+			signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+			select {
+			case err := <-errChan:
+				return err
+			case <-stop:
+				fmt.Println("\n\n👋 Shutting down all services...")
+				cancel()
+				return nil
+			case <-ctx.Done():
+				return nil
+			}
+		},
+	}
+
 	//sync server
 	SyncCmd.AddCommand(SyncConnectCmd)
 	rootCmd.AddCommand(SyncCmd)
+	rootCmd.AddCommand(startCmd)
 
 	// flags
 	progressUpdateCmd.Flags().String("manga-id", "", "Manga ID")

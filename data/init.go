@@ -7,15 +7,22 @@ import (
 	"log"
 	"os"
 
+	"github.com/baochammm/mangahub/internal/auth"
 	"github.com/baochammm/mangahub/package/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
-	dbPath := "data/mangahub.db"
+	// Read DB path from environment or use default
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "data/mangahub.db"
+	}
+
 	database.InitSQLite(dbPath)
 
 	populateManga()
-	// // populateUsers()
+	populateUsers()
 	fmt.Println("Database created and populated successfully.")
 	// err := ExportMangaToJSON(database.DB, "mangas_export.json")
 	// if err != nil {
@@ -191,4 +198,53 @@ func ExportMangaToJSON(db *sql.DB, outFile string) error {
 	}
 
 	return os.WriteFile(outFile, data, 0644)
+}
+
+func populateUsers() {
+	// Create auth repository
+	authRepo := auth.NewAuthRepository(database.DB)
+
+	// Define default users
+	users := []struct {
+		username string
+		password string
+		role     string
+	}{
+		{username: "admin", password: "admin123", role: "admin"},
+		{username: "user", password: "user123", role: "user"},
+	}
+
+	log.Println("🔐 Populating users...")
+
+	for _, u := range users {
+		// Check if user already exists
+		existingUser, err := authRepo.FindByUsername(u.username)
+		if err != nil {
+			log.Printf("❌ Error checking user %s: %v", u.username, err)
+			continue
+		}
+
+		if existingUser != nil {
+			log.Printf("⚠️  User %s already exists, skipping...", u.username)
+			continue
+		}
+
+		// Hash the password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("❌ Failed to hash password for %s: %v", u.username, err)
+			continue
+		}
+
+		// Create the user
+		err = authRepo.CreateUser(u.username, string(hashedPassword), u.role)
+		if err != nil {
+			log.Printf("❌ Failed to create user %s: %v", u.username, err)
+			continue
+		}
+
+		log.Printf("✅ Created %s user: %s (password: %s)", u.role, u.username, u.password)
+	}
+
+	log.Println("✅ User seed import completed")
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	udpserver "github.com/baochammm/mangahub/cmd/udp-server"
 	"github.com/baochammm/mangahub/internal/api/middleware"
@@ -22,7 +23,14 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
-	database.InitSQLite("./data/mangahub.db")
+
+	// Get database path from environment or use default
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/mangahub.db"
+	}
+
+	database.InitSQLite(dbPath)
 	defer database.Close()
 	//REST API Router
 	r := gin.Default()
