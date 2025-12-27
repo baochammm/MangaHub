@@ -67,23 +67,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Set cookie with SameSite=None for cross-origin requests
+	// This is important when frontend and backend are on different domains/ports
+	c.SetSameSite(http.SameSiteNoneMode)
 	c.SetCookie(
-		"jwt",
-		tokenString,
-		3600*24,
-		"/",
-		"",
-		false,
-		true,
-	) //for browser clients
+		"jwt",       // name
+		tokenString, // value
+		3600*24,     // maxAge (24 hours)
+		"/",         // path
+		"",          // domain (empty = current domain, works in Docker)
+		false,       // secure (should be true in production with HTTPS, false for local dev)
+		false,       // httpOnly (false = JavaScript can access it)
+	)
 
-	c.Header("Authorization", "Bearer "+tokenString) //for CLI clients
+	// Set Authorization header for compatibility
+	c.Header("Authorization", "Bearer "+tokenString)
 
+	// Return token in response body so frontend can store it
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"user": gin.H{
 			"id":       user.UserID,
 			"username": user.Username,
+			"role":     user.Role,
 		},
 		"token": tokenString,
 	})

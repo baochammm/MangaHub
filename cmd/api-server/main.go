@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	udpserver "github.com/baochammm/mangahub/cmd/udp-server"
 	"github.com/baochammm/mangahub/internal/api/middleware"
@@ -22,10 +23,37 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
-	database.InitSQLite("./data/mangahub.db")
+
+	// Get database path from environment or use default
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/mangahub.db"
+	}
+
+	database.InitSQLite(dbPath)
 	defer database.Close()
 	//REST API Router
 	r := gin.Default()
+
+	// CORS middleware - Allow frontend to access API from different origin
+	r.Use(func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Authorization")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
 
 	//UDP Server
 	udpRepo := udp.NewUDPRepository(database.DB)

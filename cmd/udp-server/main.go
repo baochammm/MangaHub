@@ -50,9 +50,11 @@ func StartUDPListener(port int, h *udp.UDPHandler) error {
 		}
 
 		raw := buffer[:n]
+		fmt.Printf("📦 Received UDP packet from %s: %s\n", clientAddr, string(raw))
 
 		var req udp.UDPClientRequest
 		if err := json.Unmarshal(raw, &req); err == nil {
+			fmt.Printf("✅ Parsed request - Type: %s, Action: %s\n", req.Type, req.Action)
 			switch {
 
 			case req.Type == "DISCOVER_MANGAHUB":
@@ -67,8 +69,9 @@ func StartUDPListener(port int, h *udp.UDPHandler) error {
 				respBytes, _ := json.Marshal(resp)
 				conn.WriteToUDP(respBytes, clientAddr)
 
-				fmt.Printf("Discovery response sent to %s\n", clientAddr)
+				fmt.Printf("🔍 Discovery response sent to %s\n", clientAddr)
 			case req.Type == "MANGAHUB_REQUEST":
+				fmt.Printf("📡 Processing MANGAHUB_REQUEST - Action: %s from %s\n", req.Action, clientAddr)
 				resp := h.ProcessUDPRequest(
 					req.Action,
 					req.Token,
@@ -78,14 +81,20 @@ func StartUDPListener(port int, h *udp.UDPHandler) error {
 
 				respBytes, err := json.Marshal(resp)
 				if err != nil {
-					fmt.Println("Error marshaling response:", err)
+					fmt.Println("❌ Error marshaling response:", err)
 				}
-				conn.WriteToUDP(respBytes, clientAddr)
+				n, err := conn.WriteToUDP(respBytes, clientAddr)
+				if err != nil {
+					fmt.Printf("❌ Error sending response to %s: %v\n", clientAddr, err)
+				} else {
+					fmt.Printf("✅ Sent %d bytes response to %s: %s\n", n, clientAddr, string(respBytes))
+				}
 			default:
-				fmt.Printf("Unknown UDP request type from %s: %s\n", clientAddr.String(), req.Type)
+				fmt.Printf("⚠️  Unknown UDP request type from %s: %s\n", clientAddr.String(), req.Type)
 			}
 		} else {
-			fmt.Printf("Error unmarshaling UDP request from %s: %v\n", clientAddr.String(), err)
+			fmt.Printf("❌ Error unmarshaling UDP request from %s: %v\n", clientAddr.String(), err)
+			fmt.Printf("   Raw data: %s\n", string(raw))
 		}
 	}
 
