@@ -90,13 +90,35 @@ go build ./mangahub
 Available commands:
 cd the project folder
 ```
-./mangahub library list
-./mangahub auth
-./mangahub notify 
-./mangahub sync
-./mangahub progress
+#===== COMMANDS (NO LOGGING IN NEEDED) =====
+./mangahub manga list --genre (optional) --title (optional)
+./mangahub auth login/signup --username (required) --password (required)
+
+#===== LIBRARY COMMANDS =====
+./mangahub library list --status (optional: reading, plan_to_read, completed)
+./mangahub library add --manga-id (required, eg: berserk) --status (required) 
+./mangahub library remove --manga-id (required, eg: berserk)
+./mangahub library update --manga-id --status
+
+#===== UDP NOTIFICATION COMMANDS =====
+./mangahub notify register
+./mangahub notify subscribe --manga (required) #run in separate terminal
+ "Note: If you are running the Mangahub desktop app while testing out this notification feature on CLI, note that because they are all using the udp port 3002, conflict may happen. We recommend testing this feature on either CLI or Desktop App only (On desktop app, try using Admin account for easier testing)"
+
+#===== TCP SYNC COMMAND =====
+./mangahub sync connect (try open in 2+ terminals to see live updates!)
+./mangahub progress update --manga-id (example: berserk) --chapter 3 #run in separate terminal
+./mangahub progress history
+
+#===== GRPC COMMAND =====
+./mangahub grpc get --manga (required, eg: berserk) 
+./mangahub grpc search --keyword (required, eg: to) --page (optional) --page-size (optional)
+./mangahub grpc update-progress --manga-id --chapter #Try this while running sync connect in the other terminal to see live updates!
+
+#===== CHAT COMMAND ======
+./mangahub chat join --manga (required, eg: naruto)
+
+#===== ADMIN ONLY COMMAND ======
+./mangahub admin update-chapter --manga --chapter (Update new chapter releases)
 ```
-and
-```
-mangahub auth login
-```
+

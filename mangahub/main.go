@@ -830,39 +830,6 @@ func main() {
 		},
 	}
 
-	progressSyncCmd := &cobra.Command{
-		Use:   "sync",
-		Short: "Manually sync reading progress with server",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			jwt := getToken()
-			if jwt == "" {
-				return fmt.Errorf("please login first")
-			}
-
-			url := baseURL + "/users/progress/sync"
-
-			req, err := http.NewRequest("POST", url, nil)
-			if err != nil {
-				return err
-			}
-			req.Header.Set("Authorization", "Bearer "+jwt)
-
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				return fmt.Errorf("sync failed: %s", string(body))
-			}
-
-			fmt.Println("Sync completed successfully")
-			return nil
-		},
-	}
-
 	progressSyncStatusCmd := &cobra.Command{
 		Use:   "sync-status",
 		Short: "Check progress sync status",
@@ -1170,51 +1137,10 @@ func main() {
 		},
 	}
 
-	//sync server
-	SyncCmd.AddCommand(SyncConnectCmd)
-	rootCmd.AddCommand(SyncCmd)
-	rootCmd.AddCommand(startCmd)
-
-	// flags
-	progressUpdateCmd.Flags().String("manga-id", "", "Manga ID")
-	progressUpdateCmd.Flags().Int("chapter", 0, "Chapter number")
-	progressUpdateCmd.Flags().Int("volume", 0, "Volume number")
-	progressUpdateCmd.Flags().String("notes", "", "Personal notes")
-	progressUpdateCmd.Flags().Bool("force", false, "Force backward progress update")
-	historyCmd.Flags().String("manga-id", "", "Filter by manga ID")
-
-	progressCmd.AddCommand(progressUpdateCmd)
-	progressCmd.AddCommand(historyCmd)
-	progressCmd.AddCommand(progressSyncCmd)
-	progressCmd.AddCommand(progressSyncStatusCmd)
-	rootCmd.AddCommand(progressCmd)
-
-	// notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
-
-	chatJoinCmd.Flags().String("manga", "", "Manga room to join (default: general)")
-	gprcSearchCmd.Flags().String("keyword", "", "Keyword to search manga titles")
-	gprcSearchCmd.Flags().Int("page", 1, "Page number")
-	gprcSearchCmd.Flags().Int("page-size", 10, "Number of results per page")
-	grpcGetCmd.Flags().String("manga", "", "ID of the manga to retrieve")
-	grpcUpdateProgressCmd.Flags().String("manga-id", "", "Manga ID")
-	grpcUpdateProgressCmd.Flags().Int("chapter", 0, "Chapter number")
-	grpcCmd.AddCommand(grpcGetCmd)
-	grpcCmd.AddCommand(gprcSearchCmd)
-	grpcCmd.AddCommand(grpcUpdateProgressCmd)
-	notifySubscribeCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
-	notifyCmd.AddCommand(notifyRegisterCmd)
-	notifyCmd.AddCommand(notifySubscribeCmd)
-	chatCmd.AddCommand(chatJoinCmd)
-	rootCmd.AddCommand(grpcCmd)
-	rootCmd.AddCommand(chatCmd)
-	rootCmd.AddCommand(notifyCmd)
-
-	mangaDetailCmd.Flags().String("manga", "", "Get a manga by ID")
-	mangaListCmd.Flags().StringSlice("genre", []string{}, "Filter manga by genres")
-	mangaListCmd.Flags().String("title", "", "Search manga by title")
-	mangaListCmd.Flags().String("page", "", "Page number for listing manga")
-	mangaListCmd.Flags().String("page-size", "", "Number of manga per page")
-
+	adminCmd := &cobra.Command{
+		Use:   "admin",
+		Short: "Start all listeners (TCP sync + UDP notifications)",
+	}
 	//#region manga update command (admin)
 	mangaUpdateCmd := &cobra.Command{
 		Use:   "update",
@@ -1381,9 +1307,55 @@ func main() {
 			return nil
 		},
 	}
+	adminCmd.AddCommand(mangaUpdateCmd)
+	adminCmd.AddCommand(mangaChapterUpdateCmd)
+	rootCmd.AddCommand(adminCmd)
+	//sync server
+	SyncCmd.AddCommand(SyncConnectCmd)
+	rootCmd.AddCommand(SyncCmd)
+	rootCmd.AddCommand(startCmd)
+
+	// flags
+	progressUpdateCmd.Flags().String("manga-id", "", "Manga ID")
+	progressUpdateCmd.Flags().Int("chapter", 0, "Chapter number")
+	progressUpdateCmd.Flags().Int("volume", 0, "Volume number")
+	progressUpdateCmd.Flags().String("notes", "", "Personal notes")
+	progressUpdateCmd.Flags().Bool("force", false, "Force backward progress update")
+	historyCmd.Flags().String("manga-id", "", "Filter by manga ID")
+
+	progressCmd.AddCommand(progressUpdateCmd)
+	progressCmd.AddCommand(historyCmd)
+	progressCmd.AddCommand(progressSyncStatusCmd)
+	rootCmd.AddCommand(progressCmd)
+
+	// notifyAddCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
+
+	chatJoinCmd.Flags().String("manga", "", "Manga room to join (default: general)")
+	gprcSearchCmd.Flags().String("keyword", "", "Keyword to search manga titles")
+	gprcSearchCmd.Flags().Int("page", 1, "Page number")
+	gprcSearchCmd.Flags().Int("page-size", 10, "Number of results per page")
+	grpcGetCmd.Flags().String("manga", "", "ID of the manga to retrieve")
+	grpcUpdateProgressCmd.Flags().String("manga-id", "", "Manga ID")
+	grpcUpdateProgressCmd.Flags().Int("chapter", 0, "Chapter number")
+	grpcCmd.AddCommand(grpcGetCmd)
+	grpcCmd.AddCommand(gprcSearchCmd)
+	grpcCmd.AddCommand(grpcUpdateProgressCmd)
+	notifySubscribeCmd.Flags().String("manga", "", "ID of the manga to subscribe to")
+	notifyCmd.AddCommand(notifyRegisterCmd)
+	notifyCmd.AddCommand(notifySubscribeCmd)
+	chatCmd.AddCommand(chatJoinCmd)
+	rootCmd.AddCommand(grpcCmd)
+	rootCmd.AddCommand(chatCmd)
+	rootCmd.AddCommand(notifyCmd)
+
+	mangaDetailCmd.Flags().String("manga", "", "Get a manga by ID")
+	mangaListCmd.Flags().StringSlice("genre", []string{}, "Filter manga by genres")
+	mangaListCmd.Flags().String("title", "", "Search manga by title")
+	mangaListCmd.Flags().String("page", "", "Page number for listing manga")
+	mangaListCmd.Flags().String("page-size", "", "Number of manga per page")
+
 	mangaChapterUpdateCmd.Flags().String("manga", "", "Manga ID (required)")
 	mangaChapterUpdateCmd.Flags().Int("chapter", 0, "New chapter count (required)")
-	mangaCmd.AddCommand(mangaChapterUpdateCmd)
 	mangaUpdateCmd.Flags().String("id", "", "Manga ID (required)")
 	mangaUpdateCmd.Flags().String("title", "", "Manga title")
 	mangaUpdateCmd.Flags().String("author", "", "Manga author")
