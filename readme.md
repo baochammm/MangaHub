@@ -6,6 +6,7 @@
 
 - Go 1.22 or newer  
 - (Optional) C compiler 
+- Sqlite
 
 ---
 
@@ -45,14 +46,14 @@ go run ./cmd/api-server
  Create a constant "JWT_SECRET" that stores your Jwt Secret Key
 
 # **How to run CLI**
-1. Run this in your terminal (T MỚI MOVE MANGAHUB RA NGOÀI NHA)
+1. Run this in your terminal 
 ```
 go build ./mangahub 
 ```
-Lệnh này dùng mỗi lần có chỉnh sửa gì trong file cmd/mangahub/main.go
 
 2. How to run commands
 Available commands:
+cd the project folder
 ```
 mangahub library list
 mangahub auth
