@@ -80,7 +80,8 @@ This will populate the database with mangas & account:
 ---
 
 
-# **How to run CLI - FOR TESTING PURPOSE ONLY, FOR ACTUAL CLIENT SIDE WITH FULL SERVICES, PLEASE CHECKOUT OUR DESKTOP APP**
+# **How to run CLI - FOR TESTING PURPOSE ONLY, FOR ACTUAL CLIENT SIDE WITH FULL SERVICES, PLEASE CHECKOUT OUR DESKTOP APP **
+# **Desktop app: [text](https://github.com/hathucanh13/mangahub-client)
 1. Run this in your terminal 
 ```
 go build ./mangahub 
@@ -120,5 +121,7 @@ cd the project folder
 
 #===== ADMIN ONLY COMMAND ======
 ./mangahub admin update-chapter --manga --chapter (Update new chapter releases)
+
+HAVE FUN AND HAPPY NEW YEAR!
 ```
 
